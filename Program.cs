@@ -10,7 +10,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database Context
+// Database Context - SIN SSL
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -19,21 +19,29 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     
     if (!string.IsNullOrEmpty(connectionString))
     {
-        // Log segura (sin contraseña)
-        var safeLog = connectionString.Contains("Password=") 
-            ? connectionString.Substring(0, Math.Min(connectionString.IndexOf("Password=") + 15, connectionString.Length)) + "***" 
-            : connectionString;
+        // Quitar SSL de la connection string
+        var connectionWithoutSSL = connectionString
+            .Replace("SSL Mode=Require;", "")
+            .Replace("Trust Server Certificate=true;", "");
+        
+        var safeLog = connectionWithoutSSL.Contains("Password=") 
+            ? connectionWithoutSSL.Substring(0, Math.Min(connectionWithoutSSL.IndexOf("Password=") + 15, connectionWithoutSSL.Length)) + "***" 
+            : connectionWithoutSSL;
         Console.WriteLine($"Connection: {safeLog}");
+        
+        options.UseNpgsql(connectionWithoutSSL, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null
+            );
+        });
     }
-    
-    options.UseNpgsql(connectionString, npgsqlOptions =>
+    else
     {
-        npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null
-        );
-    });
+        Console.WriteLine("ERROR: Connection string is null or empty!");
+    }
 });
 
 // Services
@@ -68,122 +76,37 @@ app.UseCors("AllowAll");
 app.UseRouting();
 app.UseAuthorization();
 
-// SOLO MAPEA LOS CONTROLADORES - elimina todo MapGet
+// Map controllers
 app.MapControllers();
 
-// Apply database migrations on startup
+// SOLO verificar conexión, NO migraciones
 try
 {
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     
-    Console.WriteLine("Checking database connection...");
+    Console.WriteLine("Testing database connection...");
     var canConnect = await dbContext.Database.CanConnectAsync();
-    Console.WriteLine($"Database can connect: {canConnect}");
+    Console.WriteLine($"Database connection test: {canConnect}");
     
     if (canConnect)
     {
-        Console.WriteLine("Applying database migrations...");
-        await dbContext.Database.MigrateAsync();
-        Console.WriteLine("Database migrations applied successfully");
-        
-        // Seed initial data if needed
-        await SeedInitialData(dbContext);
+        Console.WriteLine("✅ Database connection successful");
     }
     else
     {
-        Console.WriteLine("WARNING: Cannot apply migrations - database not accessible");
+        Console.WriteLine("❌ Database connection failed");
     }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"ERROR during database initialization: {ex.Message}");
-    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    Console.WriteLine($"❌ Database connection error: {ex.Message}");
+    // No bloquear la aplicación si hay error de BD
 }
 
-// Get port from environment variable (Render provides this)
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 Console.WriteLine($"Starting application on port: {port}");
 Console.WriteLine($"Application URL: http://0.0.0.0:{port}");
 Console.WriteLine("=== APPLICATION STARTED SUCCESSFULLY ===");
 
 app.Run($"http://0.0.0.0:{port}");
-
-// Seed initial data method
-static async Task SeedInitialData(ApplicationDbContext context)
-{
-    // Check if we already have operators
-    if (!await context.Operators.AnyAsync())
-    {
-        Console.WriteLine("Seeding initial operator data...");
-        
-        var defaultOperator = new Operator
-        {
-            FullName = "Operador Principal",
-            Document = "12345678",
-            Email = "operador@autospace.com",
-            Status = "Active",
-            IsActive = true
-        };
-        
-        context.Operators.Add(defaultOperator);
-        await context.SaveChangesAsync();
-        Console.WriteLine("Default operator created successfully");
-    }
-
-    // Check if we have rates
-    if (!await context.Rates.AnyAsync())
-    {
-        Console.WriteLine("Seeding initial rates data...");
-        
-        var rates = new[]
-        {
-            new Rate { TypeVehicle = "Car", HourPrice = 5.00m, AddPrice = 2.50m, MaxPrice = 30.00m, GraceTime = "30" },
-            new Rate { TypeVehicle = "Motorcycle", HourPrice = 3.00m, AddPrice = 1.50m, MaxPrice = 20.00m, GraceTime = "30" },
-            new Rate { TypeVehicle = "Truck", HourPrice = 8.00m, AddPrice = 4.00m, MaxPrice = 50.00m, GraceTime = "30" }
-        };
-        
-        context.Rates.AddRange(rates);
-        await context.SaveChangesAsync();
-        Console.WriteLine("Default rates created successfully");
-    }
-
-    // Check if we have at least one user
-    if (!await context.Users.AnyAsync())
-    {
-        Console.WriteLine("Seeding initial user data...");
-        
-        var defaultUser = new User
-        {
-            FullName = "Usuario Demo",
-            Document = "87654321",
-            Email = "usuario@demo.com",
-            Status = "Active"
-        };
-        
-        context.Users.Add(defaultUser);
-        await context.SaveChangesAsync();
-        Console.WriteLine("Default user created successfully");
-    }
-    
-    // Check if we have at least one vehicle
-    if (!await context.Vehicles.AnyAsync())
-    {
-        Console.WriteLine("Seeding initial vehicle data...");
-        
-        var defaultUser = await context.Users.FirstOrDefaultAsync();
-        if (defaultUser != null)
-        {
-            var defaultVehicle = new Vehicle
-            {
-                Plate = "ABC123",
-                Type = "Car",
-                UserId = defaultUser.Id
-            };
-            
-            context.Vehicles.Add(defaultVehicle);
-            await context.SaveChangesAsync();
-            Console.WriteLine("Default vehicle created successfully");
-        }
-    }
-}
