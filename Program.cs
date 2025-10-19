@@ -79,34 +79,70 @@ app.UseAuthorization();
 // Map controllers
 app.MapControllers();
 
-// SOLO verificar conexión, NO migraciones
-try
-{
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    
-    Console.WriteLine("Testing database connection...");
-    var canConnect = await dbContext.Database.CanConnectAsync();
-    Console.WriteLine($"Database connection test: {canConnect}");
-    
-    if (canConnect)
+// ✅ AGREGAR ENDPOINT RAÍZ PARA RENDER
+app.MapGet("/", () => {
+    return Results.Json(new {
+        message = "AutoSpace API is running!",
+        timestamp = DateTime.UtcNow,
+        version = "1.0.0",
+        status = "active",
+        environment = app.Environment.EnvironmentName
+    });
+});
+
+// ✅ HEALTH CHECK MEJORADO
+app.MapGet("/health", async (ApplicationDbContext dbContext) => {
+    try
     {
-        Console.WriteLine("✅ Database connection successful");
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        return Results.Json(new {
+            status = "Healthy",
+            database = canConnect ? "Connected" : "Disconnected",
+            timestamp = DateTime.UtcNow,
+            service = "AutoSpace API"
+        });
     }
-    else
+    catch (Exception ex)
     {
-        Console.WriteLine("❌ Database connection failed");
+        return Results.Json(new {
+            status = "Unhealthy",
+            error = ex.Message,
+            timestamp = DateTime.UtcNow
+        }, statusCode: 503);
     }
-}
-catch (Exception ex)
+});
+
+// ✅ VERIFICACIÓN DE BASE DE DATOS (solo log, no bloqueante)
+_ = Task.Run(async () =>
 {
-    Console.WriteLine($"❌ Database connection error: {ex.Message}");
-    // No bloquear la aplicación si hay error de BD
-}
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        
+        Console.WriteLine("Testing database connection...");
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        Console.WriteLine($"Database connection test: {canConnect}");
+        
+        if (canConnect)
+        {
+            Console.WriteLine("✅ Database connection successful");
+        }
+        else
+        {
+            Console.WriteLine("❌ Database connection failed");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Database connection error: {ex.Message}");
+    }
+});
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 Console.WriteLine($"Starting application on port: {port}");
 Console.WriteLine($"Application URL: http://0.0.0.0:{port}");
 Console.WriteLine("=== APPLICATION STARTED SUCCESSFULLY ===");
 
+// ✅ ESTA DEBE SER LA ÚLTIMA LÍNEA - INICIA EL SERVIDOR
 app.Run($"http://0.0.0.0:{port}");
