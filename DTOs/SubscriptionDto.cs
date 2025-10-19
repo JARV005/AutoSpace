@@ -17,6 +17,7 @@ namespace AutoSpace.DTOs
         public DateTime EndDate { get; set; }
 
         [Required]
+        [Range(0.01, double.MaxValue)]
         public decimal MonthlyPrice { get; set; }
     }
 
@@ -31,5 +32,6 @@ namespace AutoSpace.DTOs
         public DateTime EndDate { get; set; }
         public string Status { get; set; } = string.Empty;
         public decimal MonthlyPrice { get; set; }
+        public string SubscriptionStatus { get; set; } = string.Empty;
     }
 }

@@ -60,7 +60,9 @@ namespace AutoSpace.Services
                 SubscriptionId = activeSubscription?.Id,
                 RateId = rate.Id,
                 EntryTime = DateTime.UtcNow,
-                QRCode = GenerateQRCode(ticketDto.TicketNumber, vehicle.Plate)
+                QRCode = GenerateQRCode(ticketDto.TicketNumber, vehicle.Plate),
+                TotalAmount = 0,
+                TotalMinutes = 0
             };
 
             _context.Tickets.Add(ticket);
@@ -89,7 +91,7 @@ namespace AutoSpace.Services
             ticket.TotalMinutes = (int)duration.TotalMinutes;
 
             // If it's a subscription, no payment needed
-            if (ticket.SubscriptionId != null && ticket.Subscription.Status == "Active")
+            if (ticket.SubscriptionId != null && ticket.Subscription?.Status == "Active")
             {
                 ticket.TotalAmount = 0;
             }
@@ -142,8 +144,8 @@ namespace AutoSpace.Services
 
         private string GenerateQRCode(string ticketNumber, string plate)
         {
-            // Generate QR code string as per the requirement
-            return $"TICKET:{ticketNumber}|PLATE:{plate}|DATE:{(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds}";
+            var timestamp = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
+            return $"TICKET:{ticketNumber}|PLATE:{plate}|DATE:{timestamp}";
         }
     }
 }

@@ -1,206 +1,189 @@
 using Microsoft.EntityFrameworkCore;
 using AutoSpace.Data;
 using AutoSpace.Services;
+using AutoSpace.Models;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Log inicial para debugging
-Console.WriteLine("=== AUTOSPACE API STARTING ===");
-Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
-
-// Configurar Kestrel para Render
-builder.WebHost.ConfigureKestrel(serverOptions =>
-{
-    serverOptions.AddServerHeader = false;
-});
 
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database Configuration with environment variables
-builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
+// Database Context
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("DefaultConnection");
-    
-    // Log para debugging (sin mostrar password completo)
-    Console.WriteLine("=== DATABASE CONFIGURATION ===");
-    Console.WriteLine($"Connection String Present: {!string.IsNullOrEmpty(connectionString)}");
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    Console.WriteLine($"=== DATABASE CONNECTION ===");
+    Console.WriteLine($"Connection string is null: {string.IsNullOrEmpty(connectionString)}");
     
     if (!string.IsNullOrEmpty(connectionString))
     {
-        var safeLog = connectionString.Length > 100 ? connectionString.Substring(0, 100) + "..." : connectionString;
-        Console.WriteLine($"Connection String Preview: {safeLog}");
-        
-        // Verificar partes críticas
-        var hasHost = connectionString.Contains("Host=") || connectionString.Contains("Server=");
-        var hasDatabase = connectionString.Contains("Database=");
-        var hasUser = connectionString.Contains("Username=") || connectionString.Contains("User Id=");
-        var hasSSL = connectionString.Contains("SSL Mode=");
-        
-        Console.WriteLine($"Has Host: {hasHost}, Has Database: {hasDatabase}, Has User: {hasUser}, Has SSL: {hasSSL}");
-    }
-    else
-    {
-        Console.WriteLine("ERROR: Connection string is null or empty!");
-        Console.WriteLine("Available environment variables:");
-        foreach (var envVar in Environment.GetEnvironmentVariables().Keys)
-        {
-            Console.WriteLine($"  {envVar}");
-        }
+        // Log segura (sin contraseña)
+        var safeLog = connectionString.Contains("Password=") 
+            ? connectionString.Substring(0, Math.Min(connectionString.IndexOf("Password=") + 15, connectionString.Length)) + "***" 
+            : connectionString;
+        Console.WriteLine($"Connection: {safeLog}");
     }
     
-    try
+    options.UseNpgsql(connectionString, npgsqlOptions =>
     {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null
-            );
-        });
-        Console.WriteLine("Database context configured successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"ERROR configuring database: {ex.Message}");
-        throw;
-    }
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null
+        );
+    });
 });
 
 // Services
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 
-// Configure Email Settings from environment variables
-builder.Services.Configure<EmailSettings>(options =>
-{
-    options.SmtpServer = builder.Configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
-    options.Port = int.Parse(builder.Configuration["EmailSettings:Port"] ?? "587");
-    options.SenderName = builder.Configuration["EmailSettings:SenderName"] ?? "AutoSpace";
-    options.SenderEmail = builder.Configuration["EmailSettings:SenderEmail"] ?? "";
-    options.Username = builder.Configuration["EmailSettings:Username"] ?? "";
-    options.Password = builder.Configuration["EmailSettings:Password"] ?? "";
-});
+// Configure Email Settings
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 
-// CORS configuration from environment variables
-var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:8080", "https://localhost:8080", "http://localhost:3000", "https://localhost:3000" };
-
-Console.WriteLine($"Allowed CORS origins: {string.Join(", ", allowedOrigins)}");
-
+// CORS configuration
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend",
+    options.AddPolicy("AllowAll",
         policy =>
         {
-            policy.WithOrigins(allowedOrigins)
+            policy.AllowAnyOrigin()
                   .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+                  .AllowAnyMethod();
         });
 });
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-else
-{
-    // En producción, solo Swagger sin UI o con configuración segura
-    app.UseSwagger();
-}
 
-app.UseCors("AllowFrontend");
+app.UseCors("AllowAll");
+app.UseRouting();
 app.UseAuthorization();
+
+// SOLO MAPEA LOS CONTROLADORES - elimina todo MapGet
 app.MapControllers();
 
-// Health check endpoints - FIXED: Added proper return types
-app.MapGet("/", () => Results.Json(new { 
-    status = "AutoSpace API is running", 
-    timestamp = DateTime.UtcNow,
-    environment = app.Environment.EnvironmentName,
-    databaseConfigured = !string.IsNullOrEmpty(builder.Configuration.GetConnectionString("DefaultConnection"))
-}));
-
-app.MapGet("/health", () => Results.Json(new { 
-    status = "Healthy", 
-    timestamp = DateTime.UtcNow,
-    version = "1.0.0"
-}));
-
-// Test database connection endpoint - FIXED: Added proper return types
-app.MapGet("/test-db", async (ApplicationDbContext dbContext) =>
+// Apply database migrations on startup
+try
 {
-    try
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    
+    Console.WriteLine("Checking database connection...");
+    var canConnect = await dbContext.Database.CanConnectAsync();
+    Console.WriteLine($"Database can connect: {canConnect}");
+    
+    if (canConnect)
     {
-        Console.WriteLine("Testing database connection...");
-        var canConnect = await dbContext.Database.CanConnectAsync();
-        Console.WriteLine($"Database connection result: {canConnect}");
+        Console.WriteLine("Applying database migrations...");
+        await dbContext.Database.MigrateAsync();
+        Console.WriteLine("Database migrations applied successfully");
         
-        return Results.Json(new { 
-            database = canConnect ? "Connected successfully" : "Cannot connect",
-            timestamp = DateTime.UtcNow,
-            details = canConnect ? "Database is accessible" : "Check connection string and network"
-        });
+        // Seed initial data if needed
+        await SeedInitialData(dbContext);
     }
-    catch (Exception ex)
+    else
     {
-        Console.WriteLine($"Database connection error: {ex.Message}");
-        return Results.Json(new { 
-            database = "Error: " + ex.Message,
-            timestamp = DateTime.UtcNow,
-            errorType = ex.GetType().Name
-        });
-    }
-});
-
-// Apply migrations in background
-async Task ApplyMigrations()
-{
-    try
-    {
-        Console.WriteLine("Starting database migrations...");
-        using var scope = app.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        
-        // Check if we can connect first
-        var canConnect = await dbContext.Database.CanConnectAsync();
-        Console.WriteLine($"Database can connect before migrations: {canConnect}");
-        
-        if (canConnect)
-        {
-            Console.WriteLine("Applying migrations...");
-            await dbContext.Database.MigrateAsync();
-            Console.WriteLine("Migrations applied successfully");
-        }
-        else
-        {
-            Console.WriteLine("WARNING: Cannot apply migrations - database not accessible");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"ERROR during migrations: {ex.Message}");
-        Console.WriteLine($"Full error: {ex}");
-        // Don't crash the app - just log the error
+        Console.WriteLine("WARNING: Cannot apply migrations - database not accessible");
     }
 }
+catch (Exception ex)
+{
+    Console.WriteLine($"ERROR during database initialization: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+}
 
-// Start migrations in background without blocking app startup
-_ = Task.Run(ApplyMigrations);
-
-// Get port from Render environment variable
+// Get port from environment variable (Render provides this)
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 Console.WriteLine($"Starting application on port: {port}");
 Console.WriteLine($"Application URL: http://0.0.0.0:{port}");
-Console.WriteLine("=== APPLICATION STARTED ===");
+Console.WriteLine("=== APPLICATION STARTED SUCCESSFULLY ===");
 
 app.Run($"http://0.0.0.0:{port}");
+
+// Seed initial data method
+static async Task SeedInitialData(ApplicationDbContext context)
+{
+    // Check if we already have operators
+    if (!await context.Operators.AnyAsync())
+    {
+        Console.WriteLine("Seeding initial operator data...");
+        
+        var defaultOperator = new Operator
+        {
+            FullName = "Operador Principal",
+            Document = "12345678",
+            Email = "operador@autospace.com",
+            Status = "Active",
+            IsActive = true
+        };
+        
+        context.Operators.Add(defaultOperator);
+        await context.SaveChangesAsync();
+        Console.WriteLine("Default operator created successfully");
+    }
+
+    // Check if we have rates
+    if (!await context.Rates.AnyAsync())
+    {
+        Console.WriteLine("Seeding initial rates data...");
+        
+        var rates = new[]
+        {
+            new Rate { TypeVehicle = "Car", HourPrice = 5.00m, AddPrice = 2.50m, MaxPrice = 30.00m, GraceTime = "30" },
+            new Rate { TypeVehicle = "Motorcycle", HourPrice = 3.00m, AddPrice = 1.50m, MaxPrice = 20.00m, GraceTime = "30" },
+            new Rate { TypeVehicle = "Truck", HourPrice = 8.00m, AddPrice = 4.00m, MaxPrice = 50.00m, GraceTime = "30" }
+        };
+        
+        context.Rates.AddRange(rates);
+        await context.SaveChangesAsync();
+        Console.WriteLine("Default rates created successfully");
+    }
+
+    // Check if we have at least one user
+    if (!await context.Users.AnyAsync())
+    {
+        Console.WriteLine("Seeding initial user data...");
+        
+        var defaultUser = new User
+        {
+            FullName = "Usuario Demo",
+            Document = "87654321",
+            Email = "usuario@demo.com",
+            Status = "Active"
+        };
+        
+        context.Users.Add(defaultUser);
+        await context.SaveChangesAsync();
+        Console.WriteLine("Default user created successfully");
+    }
+    
+    // Check if we have at least one vehicle
+    if (!await context.Vehicles.AnyAsync())
+    {
+        Console.WriteLine("Seeding initial vehicle data...");
+        
+        var defaultUser = await context.Users.FirstOrDefaultAsync();
+        if (defaultUser != null)
+        {
+            var defaultVehicle = new Vehicle
+            {
+                Plate = "ABC123",
+                Type = "Car",
+                UserId = defaultUser.Id
+            };
+            
+            context.Vehicles.Add(defaultVehicle);
+            await context.SaveChangesAsync();
+            Console.WriteLine("Default vehicle created successfully");
+        }
+    }
+}

@@ -1,15 +1,26 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AutoSpace.DTOs
 {
     public class TicketDto
     {
+        [Required]
+        [StringLength(50)]
         public string TicketNumber { get; set; } = string.Empty;
+
+        [Required]
         public int VehicleId { get; set; }
+
+        [Required]
         public int OperatorId { get; set; }
     }
 
     public class TicketExitDto
     {
+        [Required]
         public int TicketId { get; set; }
+
+        [Required]
         public int OperatorId { get; set; }
     }
 
