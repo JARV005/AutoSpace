@@ -29,6 +29,7 @@ namespace AutoSpace.Controllers
                 .Include(t => t.Vehicle)
                 .Include(t => t.Operator)
                 .Include(t => t.Subscription)
+                .Include(t => t.Rate)
                 .AsQueryable();
 
             if (fromDate.HasValue)
@@ -124,6 +125,22 @@ namespace AutoSpace.Controllers
                 .Include(t => t.Subscription)
                 .Include(t => t.Rate)
                 .FirstOrDefaultAsync(t => t.Id == id);
+
+            if (ticket == null)
+            {
+                return NotFound();
+            }
+
+            return ticket;
+        }
+
+        [HttpGet("vehicle/{vehicleId}/active")]
+        public async Task<ActionResult<Ticket>> GetActiveTicketByVehicle(int vehicleId)
+        {
+            var ticket = await _context.Tickets
+                .Include(t => t.Vehicle)
+                .Include(t => t.Operator)
+                .FirstOrDefaultAsync(t => t.VehicleId == vehicleId && t.ExitTime == null);
 
             if (ticket == null)
             {

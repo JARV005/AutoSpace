@@ -39,7 +39,8 @@ namespace AutoSpace.Controllers
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     Status = s.Status,
-                    MonthlyPrice = s.MonthlyPrice
+                    MonthlyPrice = s.MonthlyPrice,
+                    
                 })
                 .ToListAsync();
 
@@ -63,7 +64,8 @@ namespace AutoSpace.Controllers
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     Status = s.Status,
-                    MonthlyPrice = s.MonthlyPrice
+                    MonthlyPrice = s.MonthlyPrice,
+                  
                 })
                 .FirstOrDefaultAsync();
 
@@ -110,7 +112,6 @@ namespace AutoSpace.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending subscription confirmation email");
-                // Don't fail the request if email fails
             }
 
             return CreatedAtAction(nameof(GetSubscription), new { id = subscription.Id }, subscription);
@@ -209,7 +210,8 @@ namespace AutoSpace.Controllers
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     Status = s.Status,
-                    MonthlyPrice = s.MonthlyPrice
+                    MonthlyPrice = s.MonthlyPrice,
+                    
                 })
                 .OrderBy(s => s.EndDate)
                 .ToListAsync();
@@ -248,6 +250,18 @@ namespace AutoSpace.Controllers
         private bool SubscriptionExists(int id)
         {
             return _context.Subscriptions.Any(e => e.Id == id);
+        }
+
+        private static string GetSubscriptionStatus(Subscription subscription)
+        {
+            var now = DateTime.UtcNow.Date;
+            
+            if (subscription.Status != "Active") return "Inactive";
+            if (subscription.EndDate < now) return "Expired";
+            if (subscription.StartDate > now) return "Pending";
+            if (subscription.EndDate <= now.AddDays(3)) return "AboutToExpire";
+            
+            return "Active";
         }
     }
 }

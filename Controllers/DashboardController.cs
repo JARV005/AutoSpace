@@ -38,7 +38,7 @@ namespace AutoSpace.Controllers
                 ExpiringSubscriptions = await _context.Subscriptions
                     .CountAsync(s => s.Status == "Active" && 
                                     s.EndDate >= DateTime.UtcNow && 
-                                    s.EndDate <= DateTime.UtcNow.AddDays(7)),
+                                    s.EndDate <= DateTime.UtcNow.AddDays(3)),
                     
                 TodayTickets = await _context.Tickets
                     .CountAsync(t => t.EntryTime.Date == today)
@@ -79,7 +79,8 @@ namespace AutoSpace.Controllers
                     t.TicketNumber,
                     VehiclePlate = t.Vehicle.Plate,
                     t.EntryTime,
-                    OperatorName = t.Operator.FullName
+                    OperatorName = t.Operator.FullName,
+                    
                 })
                 .OrderByDescending(t => t.EntryTime)
                 .ToListAsync();

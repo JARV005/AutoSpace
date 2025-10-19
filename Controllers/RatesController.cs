@@ -24,10 +24,33 @@ namespace AutoSpace.Controllers
                 .ToListAsync();
         }
 
+        [HttpGet("active")]
+        public async Task<ActionResult<IEnumerable<Rate>>> GetActiveRates()
+        {
+            return await _context.Rates
+                .Where(r => r.GraceTime != null) // Consideramos activas las que tienen tiempo de gracia configurado
+                .OrderBy(r => r.TypeVehicle)
+                .ToListAsync();
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<Rate>> GetRate(int id)
         {
             var rate = await _context.Rates.FindAsync(id);
+
+            if (rate == null)
+            {
+                return NotFound();
+            }
+
+            return rate;
+        }
+
+        [HttpGet("type/{vehicleType}")]
+        public async Task<ActionResult<Rate>> GetRateByVehicleType(string vehicleType)
+        {
+            var rate = await _context.Rates
+                .FirstOrDefaultAsync(r => r.TypeVehicle == vehicleType);
 
             if (rate == null)
             {
@@ -68,6 +91,21 @@ namespace AutoSpace.Controllers
                 }
                 throw;
             }
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteRate(int id)
+        {
+            var rate = await _context.Rates.FindAsync(id);
+            if (rate == null)
+            {
+                return NotFound();
+            }
+
+            _context.Rates.Remove(rate);
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }

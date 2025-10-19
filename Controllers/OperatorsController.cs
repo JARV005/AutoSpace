@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoSpace.Data;
 using AutoSpace.Models;
+using AutoSpace.DTOs;
 
 namespace AutoSpace.Controllers
 {
@@ -25,6 +26,15 @@ namespace AutoSpace.Controllers
                 .ToListAsync();
         }
 
+        [HttpGet("active")]
+        public async Task<ActionResult<IEnumerable<Operator>>> GetActiveOperators()
+        {
+            return await _context.Operators
+                .Where(o => o.IsActive && o.Status == "Active")
+                .OrderBy(o => o.FullName)
+                .ToListAsync();
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<Operator>> GetOperator(int id)
         {
@@ -41,6 +51,10 @@ namespace AutoSpace.Controllers
         [HttpPost]
         public async Task<ActionResult<Operator>> CreateOperator(Operator operatorObj)
         {
+            // Set default values
+            operatorObj.IsActive = true;
+            operatorObj.Status ??= "Active";
+
             _context.Operators.Add(operatorObj);
             await _context.SaveChangesAsync();
 
@@ -83,6 +97,22 @@ namespace AutoSpace.Controllers
             }
 
             operatorObj.IsActive = false;
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        [HttpPost("{id}/activate")]
+        public async Task<IActionResult> ActivateOperator(int id)
+        {
+            var operatorObj = await _context.Operators.FindAsync(id);
+            if (operatorObj == null)
+            {
+                return NotFound();
+            }
+
+            operatorObj.IsActive = true;
+            operatorObj.Status = "Active";
             await _context.SaveChangesAsync();
 
             return NoContent();
