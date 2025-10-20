@@ -3,33 +3,27 @@ using Microsoft.EntityFrameworkCore;
 using AutoSpace.Data;
 using AutoSpace.Models;
 using AutoSpace.DTOs;
-using AutoSpace.Services;
 
 namespace AutoSpace.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class SubscriptionsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        private readonly IEmailService _emailService;
-        private readonly ILogger<SubscriptionsController> _logger;
 
-        public SubscriptionsController(ApplicationDbContext context, IEmailService emailService, ILogger<SubscriptionsController> logger)
+        public SubscriptionsController(ApplicationDbContext context)
         {
             _context = context;
-            _emailService = emailService;
-            _logger = logger;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<SubscriptionResponseDto>>> GetSubscriptions()
+        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetSubscriptions()
         {
             var subscriptions = await _context.Subscriptions
                 .Include(s => s.User)
                 .Include(s => s.Vehicle)
-                .OrderByDescending(s => s.StartDate)
-                .Select(s => new SubscriptionResponseDto
+                .Select(s => new SubscriptionDto
                 {
                     Id = s.Id,
                     UserId = s.UserId,
@@ -38,87 +32,150 @@ namespace AutoSpace.Controllers
                     VehiclePlate = s.Vehicle.Plate,
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
-                    Status = s.Status,
                     MonthlyPrice = s.MonthlyPrice,
-                    
+                    Status = s.Status,
+                    CreatedAt = s.CreatedAt
                 })
                 .ToListAsync();
 
-            return Ok(subscriptions);
+            return subscriptions;
+        }
+
+        [HttpGet("active")]
+        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetActiveSubscriptions()
+        {
+            var subscriptions = await _context.Subscriptions
+                .Where(s => s.Status == "Active" && s.EndDate > DateTime.UtcNow)
+                .Include(s => s.User)
+                .Include(s => s.Vehicle)
+                .Select(s => new SubscriptionDto
+                {
+                    Id = s.Id,
+                    UserId = s.UserId,
+                    UserFullName = s.User.FullName,
+                    VehicleId = s.VehicleId,
+                    VehiclePlate = s.Vehicle.Plate,
+                    StartDate = s.StartDate,
+                    EndDate = s.EndDate,
+                    MonthlyPrice = s.MonthlyPrice,
+                    Status = s.Status,
+                    CreatedAt = s.CreatedAt
+                })
+                .ToListAsync();
+
+            return subscriptions;
+        }
+
+        [HttpGet("expiring")]
+        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetExpiringSubscriptions()
+        {
+            var expiringDate = DateTime.UtcNow.AddDays(7);
+            var subscriptions = await _context.Subscriptions
+                .Where(s => s.Status == "Active" && s.EndDate <= expiringDate)
+                .Include(s => s.User)
+                .Include(s => s.Vehicle)
+                .Select(s => new SubscriptionDto
+                {
+                    Id = s.Id,
+                    UserId = s.UserId,
+                    UserFullName = s.User.FullName,
+                    VehicleId = s.VehicleId,
+                    VehiclePlate = s.Vehicle.Plate,
+                    StartDate = s.StartDate,
+                    EndDate = s.EndDate,
+                    MonthlyPrice = s.MonthlyPrice,
+                    Status = s.Status,
+                    CreatedAt = s.CreatedAt
+                })
+                .ToListAsync();
+
+            return subscriptions;
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<SubscriptionResponseDto>> GetSubscription(int id)
+        public async Task<ActionResult<SubscriptionDto>> GetSubscription(int id)
         {
             var subscription = await _context.Subscriptions
                 .Include(s => s.User)
                 .Include(s => s.Vehicle)
-                .Where(s => s.Id == id)
-                .Select(s => new SubscriptionResponseDto
-                {
-                    Id = s.Id,
-                    UserId = s.UserId,
-                    UserFullName = s.User.FullName,
-                    VehicleId = s.VehicleId,
-                    VehiclePlate = s.Vehicle.Plate,
-                    StartDate = s.StartDate,
-                    EndDate = s.EndDate,
-                    Status = s.Status,
-                    MonthlyPrice = s.MonthlyPrice,
-                  
-                })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(s => s.Id == id);
 
             if (subscription == null)
             {
                 return NotFound();
             }
 
-            return subscription;
+            var subscriptionDto = new SubscriptionDto
+            {
+                Id = subscription.Id,
+                UserId = subscription.UserId,
+                UserFullName = subscription.User.FullName,
+                VehicleId = subscription.VehicleId,
+                VehiclePlate = subscription.Vehicle.Plate,
+                StartDate = subscription.StartDate,
+                EndDate = subscription.EndDate,
+                MonthlyPrice = subscription.MonthlyPrice,
+                Status = subscription.Status,
+                CreatedAt = subscription.CreatedAt
+            };
+
+            return subscriptionDto;
         }
 
         [HttpPost]
-        public async Task<ActionResult<Subscription>> CreateSubscription(SubscriptionDto subscriptionDto)
+        public async Task<ActionResult<SubscriptionDto>> CreateSubscription(CreateSubscriptionDto createSubscriptionDto)
         {
-            // Validate if there's an active subscription for the same vehicle
-            var existingActive = await _context.Subscriptions
-                .AnyAsync(s => s.VehicleId == subscriptionDto.VehicleId && 
-                              s.Status == "Active" && 
-                              s.EndDate >= DateTime.UtcNow);
-
-            if (existingActive)
+            // Verificar que el usuario existe
+            var userExists = await _context.Users.AnyAsync(u => u.Id == createSubscriptionDto.UserId);
+            if (!userExists)
             {
-                return BadRequest("Ya existe una mensualidad activa para este vehículo");
+                return BadRequest(new { error = "El usuario especificado no existe" });
+            }
+
+            // Verificar que el vehículo existe
+            var vehicleExists = await _context.Vehicles.AnyAsync(v => v.Id == createSubscriptionDto.VehicleId);
+            if (!vehicleExists)
+            {
+                return BadRequest(new { error = "El vehículo especificado no existe" });
             }
 
             var subscription = new Subscription
             {
-                UserId = subscriptionDto.UserId,
-                VehicleId = subscriptionDto.VehicleId,
-                StartDate = subscriptionDto.StartDate.Date,
-                EndDate = subscriptionDto.EndDate.Date,
-                MonthlyPrice = subscriptionDto.MonthlyPrice,
-                Status = "Active"
+                UserId = createSubscriptionDto.UserId,
+                VehicleId = createSubscriptionDto.VehicleId,
+                StartDate = createSubscriptionDto.StartDate,
+                EndDate = createSubscriptionDto.EndDate,
+                MonthlyPrice = createSubscriptionDto.MonthlyPrice,
+                Status = "Active",
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Subscriptions.Add(subscription);
             await _context.SaveChangesAsync();
 
-            // Send confirmation email
-            try
-            {
-                await _emailService.SendSubscriptionConfirmation(subscription);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending subscription confirmation email");
-            }
+            // Cargar datos relacionados
+            await _context.Entry(subscription).Reference(s => s.User).LoadAsync();
+            await _context.Entry(subscription).Reference(s => s.Vehicle).LoadAsync();
 
-            return CreatedAtAction(nameof(GetSubscription), new { id = subscription.Id }, subscription);
+            var subscriptionDto = new SubscriptionDto
+            {
+                Id = subscription.Id,
+                UserId = subscription.UserId,
+                UserFullName = subscription.User.FullName,
+                VehicleId = subscription.VehicleId,
+                VehiclePlate = subscription.Vehicle.Plate,
+                StartDate = subscription.StartDate,
+                EndDate = subscription.EndDate,
+                MonthlyPrice = subscription.MonthlyPrice,
+                Status = subscription.Status,
+                CreatedAt = subscription.CreatedAt
+            };
+
+            return CreatedAtAction(nameof(GetSubscription), new { id = subscription.Id }, subscriptionDto);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateSubscription(int id, SubscriptionDto subscriptionDto)
+        public async Task<IActionResult> UpdateSubscription(int id, UpdateSubscriptionDto updateSubscriptionDto)
         {
             var subscription = await _context.Subscriptions.FindAsync(id);
             if (subscription == null)
@@ -126,36 +183,16 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            // Validate if there's another active subscription for the same vehicle
-            var existingActive = await _context.Subscriptions
-                .AnyAsync(s => s.VehicleId == subscriptionDto.VehicleId && 
-                              s.Id != id && 
-                              s.Status == "Active" && 
-                              s.EndDate >= DateTime.UtcNow);
+            if (updateSubscriptionDto.EndDate.HasValue)
+                subscription.EndDate = updateSubscriptionDto.EndDate.Value;
 
-            if (existingActive)
-            {
-                return BadRequest("Ya existe otra mensualidad activa para este vehículo");
-            }
+            if (updateSubscriptionDto.MonthlyPrice.HasValue)
+                subscription.MonthlyPrice = updateSubscriptionDto.MonthlyPrice.Value;
 
-            subscription.UserId = subscriptionDto.UserId;
-            subscription.VehicleId = subscriptionDto.VehicleId;
-            subscription.StartDate = subscriptionDto.StartDate.Date;
-            subscription.EndDate = subscriptionDto.EndDate.Date;
-            subscription.MonthlyPrice = subscriptionDto.MonthlyPrice;
+            if (!string.IsNullOrEmpty(updateSubscriptionDto.Status))
+                subscription.Status = updateSubscriptionDto.Status;
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!SubscriptionExists(id))
-                {
-                    return NotFound();
-                }
-                throw;
-            }
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -184,84 +221,10 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            subscription.Status = "Inactive";
+            subscription.Status = "Cancelled";
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        [HttpGet("expiring")]
-        public async Task<ActionResult<IEnumerable<SubscriptionResponseDto>>> GetExpiringSubscriptions()
-        {
-            var threeDaysFromNow = DateTime.UtcNow.AddDays(3);
-            var subscriptions = await _context.Subscriptions
-                .Include(s => s.User)
-                .Include(s => s.Vehicle)
-                .Where(s => s.Status == "Active" && 
-                           s.EndDate <= threeDaysFromNow && 
-                           s.EndDate >= DateTime.UtcNow.Date)
-                .Select(s => new SubscriptionResponseDto
-                {
-                    Id = s.Id,
-                    UserId = s.UserId,
-                    UserFullName = s.User.FullName,
-                    VehicleId = s.VehicleId,
-                    VehiclePlate = s.Vehicle.Plate,
-                    StartDate = s.StartDate,
-                    EndDate = s.EndDate,
-                    Status = s.Status,
-                    MonthlyPrice = s.MonthlyPrice,
-                    
-                })
-                .OrderBy(s => s.EndDate)
-                .ToListAsync();
-
-            return Ok(subscriptions);
-        }
-
-        [HttpPost("send-expiration-warnings")]
-        public async Task<IActionResult> SendExpirationWarnings()
-        {
-            var expiringSubscriptions = await _context.Subscriptions
-                .Include(s => s.User)
-                .Where(s => s.Status == "Active" && 
-                           s.EndDate <= DateTime.UtcNow.AddDays(3) && 
-                           s.EndDate >= DateTime.UtcNow.Date &&
-                           s.User.Email != null)
-                .ToListAsync();
-
-            var sentCount = 0;
-            foreach (var subscription in expiringSubscriptions)
-            {
-                try
-                {
-                    await _emailService.SendSubscriptionExpirationWarning(subscription);
-                    sentCount++;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error sending expiration warning for subscription {SubscriptionId}", subscription.Id);
-                }
-            }
-
-            return Ok(new { SentCount = sentCount, Total = expiringSubscriptions.Count });
-        }
-
-        private bool SubscriptionExists(int id)
-        {
-            return _context.Subscriptions.Any(e => e.Id == id);
-        }
-
-        private static string GetSubscriptionStatus(Subscription subscription)
-        {
-            var now = DateTime.UtcNow.Date;
-            
-            if (subscription.Status != "Active") return "Inactive";
-            if (subscription.EndDate < now) return "Expired";
-            if (subscription.StartDate > now) return "Pending";
-            if (subscription.EndDate <= now.AddDays(3)) return "AboutToExpire";
-            
-            return "Active";
         }
     }
 }

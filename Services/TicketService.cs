@@ -8,144 +8,116 @@ namespace AutoSpace.Services
     public class TicketService : ITicketService
     {
         private readonly ApplicationDbContext _context;
-        private readonly ILogger<TicketService> _logger;
 
-        public TicketService(ApplicationDbContext context, ILogger<TicketService> logger)
+        public TicketService(ApplicationDbContext context)
         {
             _context = context;
-            _logger = logger;
         }
 
-        public async Task<Ticket> CreateEntryAsync(TicketDto ticketDto)
+        public async Task<Ticket> RegisterEntryAsync(CreateTicketDto createTicketDto)
         {
-            // Check if there's already an active ticket for this vehicle
-            var activeTicket = await _context.Tickets
-                .FirstOrDefaultAsync(t => t.VehicleId == ticketDto.VehicleId && t.ExitTime == null);
-
-            if (activeTicket != null)
-            {
-                throw new InvalidOperationException("Ya existe un ticket activo para este vehículo");
-            }
-
-            // Check for active subscription for this vehicle
-            var activeSubscription = await _context.Subscriptions
-                .FirstOrDefaultAsync(s => s.VehicleId == ticketDto.VehicleId && 
-                                         s.Status == "Active" && 
-                                         s.StartDate <= DateTime.UtcNow && 
-                                         s.EndDate >= DateTime.UtcNow);
-
-            // Get the vehicle to know the type and then get the rate for that type
             var vehicle = await _context.Vehicles
                 .Include(v => v.User)
-                .FirstOrDefaultAsync(v => v.Id == ticketDto.VehicleId);
-
+                .FirstOrDefaultAsync(v => v.Id == createTicketDto.VehicleId);
             if (vehicle == null)
-            {
-                throw new InvalidOperationException("Vehículo no encontrado");
-            }
+                throw new ArgumentException("El vehículo especificado no existe");
+
+            var activeTicket = await _context.Tickets
+                .FirstOrDefaultAsync(t => t.VehicleId == createTicketDto.VehicleId && t.ExitTime == null);
+            if (activeTicket != null)
+                throw new InvalidOperationException("El vehículo ya tiene un ticket activo");
+
+            var activeSubscription = await _context.Subscriptions
+                .FirstOrDefaultAsync(s => s.VehicleId == createTicketDto.VehicleId && 
+                                         s.Status == "Active" && 
+                                         s.EndDate > DateTime.UtcNow);
 
             var rate = await _context.Rates
-                .FirstOrDefaultAsync(r => r.TypeVehicle == vehicle.Type);
-
-            if (rate == null)
-            {
-                throw new InvalidOperationException($"No hay tarifa configurada para el tipo de vehículo: {vehicle.Type}");
-            }
+                .FirstOrDefaultAsync(r => r.TypeVehicle == vehicle.Type && r.IsActive);
 
             var ticket = new Ticket
             {
-                TicketNumber = ticketDto.TicketNumber,
-                VehicleId = ticketDto.VehicleId,
-                OperatorId = ticketDto.OperatorId,
+                TicketNumber = GenerateTicketNumber(),
+                VehicleId = createTicketDto.VehicleId,
+                OperatorId = createTicketDto.OperatorId,
                 SubscriptionId = activeSubscription?.Id,
-                RateId = rate.Id,
+                RateId = rate?.Id,
                 EntryTime = DateTime.UtcNow,
-                QRCode = GenerateQRCode(ticketDto.TicketNumber, vehicle.Plate),
-                TotalAmount = 0,
-                TotalMinutes = 0
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Tickets.Add(ticket);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Ticket {TicketId} created for vehicle {VehicleId}", ticket.Id, ticket.VehicleId);
+            await _context.Entry(ticket).Reference(t => t.Vehicle).LoadAsync();
+            await _context.Entry(ticket).Reference(t => t.Operator).LoadAsync();
+
             return ticket;
         }
 
-        public async Task<Ticket> ProcessExitAsync(TicketExitDto exitDto)
+        public async Task<Ticket> RegisterExitAsync(ExitTicketDto exitTicketDto)
         {
             var ticket = await _context.Tickets
                 .Include(t => t.Vehicle)
-                .Include(t => t.Operator)
                 .Include(t => t.Subscription)
                 .Include(t => t.Rate)
-                .FirstOrDefaultAsync(t => t.Id == exitDto.TicketId && t.ExitTime == null);
+                .FirstOrDefaultAsync(t => t.Id == exitTicketDto.TicketId);
 
             if (ticket == null)
-            {
-                throw new KeyNotFoundException("Ticket no encontrado o ya cerrado");
-            }
+                throw new ArgumentException("Ticket not found");
+
+            if (ticket.ExitTime.HasValue)
+                throw new InvalidOperationException("Ticket already closed");
 
             ticket.ExitTime = DateTime.UtcNow;
-            var duration = ticket.ExitTime.Value - ticket.EntryTime;
-            ticket.TotalMinutes = (int)duration.TotalMinutes;
+            ticket.OperatorId = exitTicketDto.OperatorId;
 
-            // If it's a subscription, no payment needed
-            if (ticket.SubscriptionId != null && ticket.Subscription?.Status == "Active")
+            var totalMinutes = (int)(ticket.ExitTime.Value - ticket.EntryTime).TotalMinutes;
+            ticket.TotalMinutes = totalMinutes;
+
+            if (ticket.SubscriptionId.HasValue && 
+                ticket.Subscription?.Status == "Active" && 
+                ticket.Subscription.EndDate > DateTime.UtcNow)
             {
                 ticket.TotalAmount = 0;
             }
             else
             {
-                ticket.TotalAmount = CalculateAmount(ticket.EntryTime, ticket.ExitTime.Value, ticket.Rate);
+                ticket.TotalAmount = await CalculateAmountAsync(
+                    ticket.EntryTime, 
+                    ticket.ExitTime.Value, 
+                    ticket.Vehicle.Type);
             }
 
             await _context.SaveChangesAsync();
-            _logger.LogInformation("Ticket {TicketId} closed for vehicle {VehicleId}, Amount: {Amount}", ticket.Id, ticket.VehicleId, ticket.TotalAmount);
-
             return ticket;
         }
 
-        public decimal CalculateAmount(DateTime entryTime, DateTime exitTime, Rate rate)
+        public async Task<decimal> CalculateAmountAsync(DateTime entryTime, DateTime exitTime, string vehicleType)
         {
+            var rate = await _context.Rates
+                .FirstOrDefaultAsync(r => r.TypeVehicle == vehicleType && r.IsActive);
+
+            if (rate == null)
+                throw new InvalidOperationException($"No rate found for vehicle type: {vehicleType}");
+
             var duration = exitTime - entryTime;
-            var totalMinutes = (decimal)duration.TotalMinutes;
-
-            // Parse grace time (assuming it's in minutes)
-            if (!int.TryParse(rate.GraceTime, out int graceMinutes))
-            {
-                graceMinutes = 30; // default
-            }
-
-            // Subtract grace period
-            var chargeableMinutes = Math.Max(0, totalMinutes - graceMinutes);
-
-            if (chargeableMinutes <= 0) return 0;
-
-            // Calculate hours (round up to nearest hour)
-            var chargeableHours = Math.Ceiling(chargeableMinutes / 60);
-
-            var amount = rate.HourPrice;
             
-            // Add additional rate for extra hours
-            if (chargeableHours > 1)
-            {
-                amount += (chargeableHours - 1) * rate.AddPrice;
-            }
+            // 🛠️ CORRECCIÓN APLICADA
+            double totalHoursDouble = Math.Ceiling(duration.TotalHours);
+            decimal totalHours = (decimal)totalHoursDouble;
 
-            // Apply daily cap if configured
-            if (rate.MaxPrice > 0 && amount > rate.MaxPrice)
-            {
-                amount = rate.MaxPrice;
-            }
+            decimal calculatedAmount = totalHours * rate.HourPrice;
 
-            return amount;
+            if (rate.MaxPrice.HasValue && calculatedAmount > rate.MaxPrice.Value)
+                return rate.MaxPrice.Value;
+
+            return calculatedAmount;
         }
 
-        private string GenerateQRCode(string ticketNumber, string plate)
+        private string GenerateTicketNumber()
         {
-            var timestamp = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
-            return $"TICKET:{ticketNumber}|PLATE:{plate}|DATE:{timestamp}";
+            return "TKT" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         }
     }
 }

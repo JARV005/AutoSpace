@@ -5,8 +5,8 @@ namespace AutoSpace.Services
 {
     public interface ITicketService
     {
-        Task<Ticket> CreateEntryAsync(TicketDto ticketDto);
-        Task<Ticket> ProcessExitAsync(TicketExitDto exitDto);
-        decimal CalculateAmount(DateTime entryTime, DateTime exitTime, Rate rate);
+        Task<Ticket> RegisterEntryAsync(CreateTicketDto createTicketDto);
+        Task<Ticket> RegisterExitAsync(ExitTicketDto exitTicketDto);
+        Task<decimal> CalculateAmountAsync(DateTime entryTime, DateTime exitTime, string vehicleType);
     }
 }

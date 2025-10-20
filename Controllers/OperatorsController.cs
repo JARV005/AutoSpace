@@ -6,8 +6,8 @@ using AutoSpace.DTOs;
 
 namespace AutoSpace.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class OperatorsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -18,71 +18,149 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Operator>>> GetOperators()
+        public async Task<ActionResult<IEnumerable<OperatorDto>>> GetOperators()
         {
-            return await _context.Operators
-                .Where(o => o.IsActive)
-                .OrderBy(o => o.FullName)
+            var operators = await _context.Operators
+                .Include(o => o.Tickets)
+                .Include(o => o.Payments)
+                .Include(o => o.Shifts)
+                .Select(o => new OperatorDto
+                {
+                    Id = o.Id,
+                    FullName = o.FullName,
+                    Document = o.Document,
+                    Email = o.Email,
+                    Status = o.Status,
+                    IsActive = o.IsActive,
+                    CreatedAt = o.CreatedAt,
+                    TicketsProcessed = o.Tickets.Count,
+                    TotalCollected = o.Payments.Where(p => p.TicketId != null).Sum(p => p.Amount)
+                })
                 .ToListAsync();
+
+            return operators;
         }
 
         [HttpGet("active")]
-        public async Task<ActionResult<IEnumerable<Operator>>> GetActiveOperators()
+        public async Task<ActionResult<IEnumerable<OperatorDto>>> GetActiveOperators()
         {
-            return await _context.Operators
-                .Where(o => o.IsActive && o.Status == "Active")
-                .OrderBy(o => o.FullName)
+            var operators = await _context.Operators
+                .Where(o => o.IsActive)
+                .Include(o => o.Tickets)
+                .Include(o => o.Payments)
+                .Include(o => o.Shifts)
+                .Select(o => new OperatorDto
+                {
+                    Id = o.Id,
+                    FullName = o.FullName,
+                    Document = o.Document,
+                    Email = o.Email,
+                    Status = o.Status,
+                    IsActive = o.IsActive,
+                    CreatedAt = o.CreatedAt,
+                    TicketsProcessed = o.Tickets.Count,
+                    TotalCollected = o.Payments.Where(p => p.TicketId != null).Sum(p => p.Amount)
+                })
                 .ToListAsync();
+
+            return operators;
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Operator>> GetOperator(int id)
+        public async Task<ActionResult<OperatorDto>> GetOperator(int id)
         {
-            var operatorObj = await _context.Operators.FindAsync(id);
+            var operatorEntity = await _context.Operators
+                .Include(o => o.Tickets)
+                .Include(o => o.Payments)
+                .Include(o => o.Shifts)
+                .FirstOrDefaultAsync(o => o.Id == id);
 
-            if (operatorObj == null)
+            if (operatorEntity == null)
             {
                 return NotFound();
             }
 
-            return operatorObj;
+            var operatorDto = new OperatorDto
+            {
+                Id = operatorEntity.Id,
+                FullName = operatorEntity.FullName,
+                Document = operatorEntity.Document,
+                Email = operatorEntity.Email,
+                Status = operatorEntity.Status,
+                IsActive = operatorEntity.IsActive,
+                CreatedAt = operatorEntity.CreatedAt,
+                TicketsProcessed = operatorEntity.Tickets.Count,
+                TotalCollected = operatorEntity.Payments.Where(p => p.TicketId != null).Sum(p => p.Amount)
+            };
+
+            return operatorDto;
         }
 
         [HttpPost]
-        public async Task<ActionResult<Operator>> CreateOperator(Operator operatorObj)
+        public async Task<ActionResult<OperatorDto>> CreateOperator(CreateOperatorDto createOperatorDto)
         {
-            // Set default values
-            operatorObj.IsActive = true;
-            operatorObj.Status ??= "Active";
+            // Verificar si el documento o email ya existen
+            var existingOperator = await _context.Operators
+                .FirstOrDefaultAsync(o => o.Document == createOperatorDto.Document || o.Email == createOperatorDto.Email);
+            if (existingOperator != null)
+            {
+                return BadRequest(new { error = "Ya existe un operador con el mismo documento o email" });
+            }
 
-            _context.Operators.Add(operatorObj);
+            var operatorEntity = new Operator
+            {
+                FullName = createOperatorDto.FullName,
+                Document = createOperatorDto.Document,
+                Email = createOperatorDto.Email,
+                Status = createOperatorDto.Status,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Operators.Add(operatorEntity);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetOperator), new { id = operatorObj.Id }, operatorObj);
+            var operatorDto = new OperatorDto
+            {
+                Id = operatorEntity.Id,
+                FullName = operatorEntity.FullName,
+                Document = operatorEntity.Document,
+                Email = operatorEntity.Email,
+                Status = operatorEntity.Status,
+                IsActive = operatorEntity.IsActive,
+                CreatedAt = operatorEntity.CreatedAt,
+                TicketsProcessed = 0,
+                TotalCollected = 0
+            };
+
+            return CreatedAtAction(nameof(GetOperator), new { id = operatorEntity.Id }, operatorDto);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateOperator(int id, Operator operatorObj)
+        public async Task<IActionResult> UpdateOperator(int id, UpdateOperatorDto updateOperatorDto)
         {
-            if (id != operatorObj.Id)
+            var operatorEntity = await _context.Operators.FindAsync(id);
+            if (operatorEntity == null)
             {
-                return BadRequest();
+                return NotFound();
             }
 
-            _context.Entry(operatorObj).State = EntityState.Modified;
+            if (!string.IsNullOrEmpty(updateOperatorDto.FullName))
+                operatorEntity.FullName = updateOperatorDto.FullName;
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!OperatorExists(id))
-                {
-                    return NotFound();
-                }
-                throw;
-            }
+            if (!string.IsNullOrEmpty(updateOperatorDto.Document))
+                operatorEntity.Document = updateOperatorDto.Document;
+
+            if (!string.IsNullOrEmpty(updateOperatorDto.Email))
+                operatorEntity.Email = updateOperatorDto.Email;
+
+            if (!string.IsNullOrEmpty(updateOperatorDto.Status))
+                operatorEntity.Status = updateOperatorDto.Status;
+
+            if (updateOperatorDto.IsActive.HasValue)
+                operatorEntity.IsActive = updateOperatorDto.IsActive.Value;
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -90,37 +168,16 @@ namespace AutoSpace.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOperator(int id)
         {
-            var operatorObj = await _context.Operators.FindAsync(id);
-            if (operatorObj == null)
+            var operatorEntity = await _context.Operators.FindAsync(id);
+            if (operatorEntity == null)
             {
                 return NotFound();
             }
 
-            operatorObj.IsActive = false;
+            _context.Operators.Remove(operatorEntity);
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        [HttpPost("{id}/activate")]
-        public async Task<IActionResult> ActivateOperator(int id)
-        {
-            var operatorObj = await _context.Operators.FindAsync(id);
-            if (operatorObj == null)
-            {
-                return NotFound();
-            }
-
-            operatorObj.IsActive = true;
-            operatorObj.Status = "Active";
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool OperatorExists(int id)
-        {
-            return _context.Operators.Any(e => e.Id == id);
         }
     }
 }

@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoSpace.Data;
 using AutoSpace.Models;
+using AutoSpace.DTOs;
 
 namespace AutoSpace.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class VehiclesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -17,29 +18,35 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehicles()
+        public async Task<ActionResult<IEnumerable<VehicleDto>>> GetVehicles()
         {
-            return await _context.Vehicles
+            var vehicles = await _context.Vehicles
                 .Include(v => v.User)
-                .OrderBy(v => v.Plate)
+                .Include(v => v.Subscriptions)
+                .Include(v => v.Tickets)
+                .Select(v => new VehicleDto
+                {
+                    Id = v.Id,
+                    Plate = v.Plate,
+                    Type = v.Type,
+                    UserId = v.UserId,
+                    UserFullName = v.User.FullName,
+                    CreatedAt = v.CreatedAt,
+                    TicketCount = v.Tickets.Count,
+                    HasActiveSubscription = v.Subscriptions.Any(s => s.Status == "Active" && s.EndDate > DateTime.UtcNow)
+                })
                 .ToListAsync();
-        }
 
-        [HttpGet("active")]
-        public async Task<ActionResult<IEnumerable<Vehicle>>> GetActiveVehicles()
-        {
-            return await _context.Vehicles
-                .Include(v => v.User)
-                .Where(v => v.User.Status == "Active") // Solo vehículos de usuarios activos
-                .OrderBy(v => v.Plate)
-                .ToListAsync();
+            return vehicles;
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Vehicle>> GetVehicle(int id)
+        public async Task<ActionResult<VehicleDto>> GetVehicle(int id)
         {
             var vehicle = await _context.Vehicles
                 .Include(v => v.User)
+                .Include(v => v.Subscriptions)
+                .Include(v => v.Tickets)
                 .FirstOrDefaultAsync(v => v.Id == id);
 
             if (vehicle == null)
@@ -47,61 +54,95 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            return vehicle;
+            var vehicleDto = new VehicleDto
+            {
+                Id = vehicle.Id,
+                Plate = vehicle.Plate,
+                Type = vehicle.Type,
+                UserId = vehicle.UserId,
+                UserFullName = vehicle.User.FullName,
+                CreatedAt = vehicle.CreatedAt,
+                TicketCount = vehicle.Tickets.Count,
+                HasActiveSubscription = vehicle.Subscriptions.Any(s => s.Status == "Active" && s.EndDate > DateTime.UtcNow)
+            };
+
+            return vehicleDto;
         }
 
-        [HttpGet("plate/{plate}")]
-        public async Task<ActionResult<Vehicle>> GetVehicleByPlate(string plate)
+        [HttpPost]
+        public async Task<ActionResult<VehicleDto>> CreateVehicle(CreateVehicleDto createVehicleDto)
         {
-            var vehicle = await _context.Vehicles
-                .Include(v => v.User)
-                .FirstOrDefaultAsync(v => v.Plate == plate.ToUpper());
+            // Verificar si el usuario existe
+            var userExists = await _context.Users.AnyAsync(u => u.Id == createVehicleDto.UserId);
+            if (!userExists)
+            {
+                return BadRequest(new { error = "El usuario especificado no existe" });
+            }
 
+            // Verificar si la placa ya existe
+            var existingVehicle = await _context.Vehicles
+                .FirstOrDefaultAsync(v => v.Plate == createVehicleDto.Plate);
+                
+            if (existingVehicle != null)
+            {
+                return BadRequest(new { error = "Ya existe un vehículo con esta placa" });
+            }
+
+            var vehicle = new Vehicle
+            {
+                Plate = createVehicleDto.Plate,
+                Type = createVehicleDto.Type,
+                UserId = createVehicleDto.UserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Vehicles.Add(vehicle);
+            await _context.SaveChangesAsync();
+
+            // Cargar datos relacionados
+            await _context.Entry(vehicle).Reference(v => v.User).LoadAsync();
+
+            var vehicleDto = new VehicleDto
+            {
+                Id = vehicle.Id,
+                Plate = vehicle.Plate,
+                Type = vehicle.Type,
+                UserId = vehicle.UserId,
+                UserFullName = vehicle.User.FullName,
+                CreatedAt = vehicle.CreatedAt,
+                TicketCount = 0,
+                HasActiveSubscription = false
+            };
+
+            return CreatedAtAction(nameof(GetVehicle), new { id = vehicle.Id }, vehicleDto);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateVehicle(int id, UpdateVehicleDto updateVehicleDto)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
             if (vehicle == null)
             {
                 return NotFound();
             }
 
-            return vehicle;
-        }
+            if (!string.IsNullOrEmpty(updateVehicleDto.Plate))
+                vehicle.Plate = updateVehicleDto.Plate;
 
-        [HttpPost]
-        public async Task<ActionResult<Vehicle>> CreateVehicle(Vehicle vehicle)
-        {
-            // Normalizar placa
-            vehicle.Plate = vehicle.Plate.ToUpper();
+            if (!string.IsNullOrEmpty(updateVehicleDto.Type))
+                vehicle.Type = updateVehicleDto.Type;
 
-            _context.Vehicles.Add(vehicle);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetVehicle), new { id = vehicle.Id }, vehicle);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateVehicle(int id, Vehicle vehicle)
-        {
-            if (id != vehicle.Id)
+            if (updateVehicleDto.UserId.HasValue)
             {
-                return BadRequest();
-            }
-
-            // Normalizar placa
-            vehicle.Plate = vehicle.Plate.ToUpper();
-
-            _context.Entry(vehicle).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!VehicleExists(id))
+                var userExists = await _context.Users.AnyAsync(u => u.Id == updateVehicleDto.UserId.Value);
+                if (!userExists)
                 {
-                    return NotFound();
+                    return BadRequest(new { error = "El usuario especificado no existe" });
                 }
-                throw;
+                vehicle.UserId = updateVehicleDto.UserId.Value;
             }
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -119,11 +160,6 @@ namespace AutoSpace.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private bool VehicleExists(int id)
-        {
-            return _context.Vehicles.Any(e => e.Id == id);
         }
     }
 }

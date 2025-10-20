@@ -1,27 +1,15 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace AutoSpace.DTOs
 {
-    public class SubscriptionDto
+    public class CreateSubscriptionDto
     {
-        [Required]
         public int UserId { get; set; }
-
-        [Required]
         public int VehicleId { get; set; }
-
-        [Required]
         public DateTime StartDate { get; set; }
-
-        [Required]
         public DateTime EndDate { get; set; }
-
-        [Required]
-        [Range(0.01, double.MaxValue)]
         public decimal MonthlyPrice { get; set; }
     }
 
-    public class SubscriptionResponseDto
+    public class SubscriptionDto
     {
         public int Id { get; set; }
         public int UserId { get; set; }
@@ -30,8 +18,17 @@ namespace AutoSpace.DTOs
         public string VehiclePlate { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public string Status { get; set; } = string.Empty;
         public decimal MonthlyPrice { get; set; }
-        public string SubscriptionStatus { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public bool IsExpired => EndDate < DateTime.UtcNow;
+        public int DaysUntilExpiry => (EndDate - DateTime.UtcNow).Days;
+    }
+
+    public class UpdateSubscriptionDto
+    {
+        public DateTime? EndDate { get; set; }
+        public decimal? MonthlyPrice { get; set; }
+        public string? Status { get; set; }
     }
 }

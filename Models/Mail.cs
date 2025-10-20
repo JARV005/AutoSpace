@@ -1,26 +1,31 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace AutoSpace.Models;
-public class Mail
+namespace AutoSpace.Models
 {
-    [Key]
-    public int Id { get; set; }
-    
-    [MaxLength(255)]
-    public string Subject { get; set; }
-    
-    public string Body { get; set; }
-    
-    public DateTime SentAt { get; set; }
-    
-    [ForeignKey("User")]
-    public int UserId { get; set; }
-    
-    [ForeignKey("Subscription")]
-    public int SubscriptionId { get; set; }
-    
-    // Navigation properties
-    public virtual User User { get; set; }
-    public virtual Subscription Subscription { get; set; }
+    public class Mail
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string Subject { get; set; } = string.Empty;
+
+        [Required]
+        public string Body { get; set; } = string.Empty;
+
+        public DateTime SentAt { get; set; } = DateTime.UtcNow;
+
+        public int? UserId { get; set; }
+
+        public int? SubscriptionId { get; set; }
+
+        // Navigation properties
+        [ForeignKey("UserId")]
+        public virtual User? User { get; set; }
+        
+        [ForeignKey("SubscriptionId")]
+        public virtual Subscription? Subscription { get; set; }
+    }
 }

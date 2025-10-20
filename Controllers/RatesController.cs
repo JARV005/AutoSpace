@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoSpace.Data;
 using AutoSpace.Models;
+using AutoSpace.DTOs;
 
 namespace AutoSpace.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class RatesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -17,80 +18,130 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Rate>>> GetRates()
+        public async Task<ActionResult<IEnumerable<RateDto>>> GetRates()
         {
-            return await _context.Rates
-                .OrderBy(r => r.TypeVehicle)
+            var rates = await _context.Rates
+                .Select(r => new RateDto
+                {
+                    Id = r.Id,
+                    TypeVehicle = r.TypeVehicle,
+                    HourPrice = r.HourPrice,
+                    AddPrice = r.AddPrice,
+                    MaxPrice = r.MaxPrice,
+                    GraceTime = r.GraceTime,
+                    IsActive = r.IsActive,
+                    CreatedAt = r.CreatedAt
+                })
                 .ToListAsync();
+
+            return rates;
         }
 
-        [HttpGet("active")]
-        public async Task<ActionResult<IEnumerable<Rate>>> GetActiveRates()
+        [HttpGet("current")]
+        public async Task<ActionResult<IEnumerable<RateDto>>> GetCurrentRates()
         {
-            return await _context.Rates
-                .Where(r => r.GraceTime != null) // Consideramos activas las que tienen tiempo de gracia configurado
-                .OrderBy(r => r.TypeVehicle)
+            var rates = await _context.Rates
+                .Where(r => r.IsActive)
+                .Select(r => new RateDto
+                {
+                    Id = r.Id,
+                    TypeVehicle = r.TypeVehicle,
+                    HourPrice = r.HourPrice,
+                    AddPrice = r.AddPrice,
+                    MaxPrice = r.MaxPrice,
+                    GraceTime = r.GraceTime,
+                    IsActive = r.IsActive,
+                    CreatedAt = r.CreatedAt
+                })
                 .ToListAsync();
+
+            return rates;
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Rate>> GetRate(int id)
+        public async Task<ActionResult<RateDto>> GetRate(int id)
         {
             var rate = await _context.Rates.FindAsync(id);
-
             if (rate == null)
             {
                 return NotFound();
             }
 
-            return rate;
-        }
-
-        [HttpGet("type/{vehicleType}")]
-        public async Task<ActionResult<Rate>> GetRateByVehicleType(string vehicleType)
-        {
-            var rate = await _context.Rates
-                .FirstOrDefaultAsync(r => r.TypeVehicle == vehicleType);
-
-            if (rate == null)
+            var rateDto = new RateDto
             {
-                return NotFound();
-            }
+                Id = rate.Id,
+                TypeVehicle = rate.TypeVehicle,
+                HourPrice = rate.HourPrice,
+                AddPrice = rate.AddPrice,
+                MaxPrice = rate.MaxPrice,
+                GraceTime = rate.GraceTime,
+                IsActive = rate.IsActive,
+                CreatedAt = rate.CreatedAt
+            };
 
-            return rate;
+            return rateDto;
         }
 
         [HttpPost]
-        public async Task<ActionResult<Rate>> CreateRate(Rate rate)
+        public async Task<ActionResult<RateDto>> CreateRate(CreateRateDto createRateDto)
         {
+            var rate = new Rate
+            {
+                TypeVehicle = createRateDto.TypeVehicle,
+                HourPrice = createRateDto.HourPrice,
+                AddPrice = createRateDto.AddPrice,
+                MaxPrice = createRateDto.MaxPrice,
+                GraceTime = createRateDto.GraceTime,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
             _context.Rates.Add(rate);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetRate), new { id = rate.Id }, rate);
+            var rateDto = new RateDto
+            {
+                Id = rate.Id,
+                TypeVehicle = rate.TypeVehicle,
+                HourPrice = rate.HourPrice,
+                AddPrice = rate.AddPrice,
+                MaxPrice = rate.MaxPrice,
+                GraceTime = rate.GraceTime,
+                IsActive = rate.IsActive,
+                CreatedAt = rate.CreatedAt
+            };
+
+            return CreatedAtAction(nameof(GetRate), new { id = rate.Id }, rateDto);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateRate(int id, Rate rate)
+        public async Task<IActionResult> UpdateRate(int id, UpdateRateDto updateRateDto)
         {
-            if (id != rate.Id)
+            var rate = await _context.Rates.FindAsync(id);
+            if (rate == null)
             {
-                return BadRequest();
+                return NotFound();
             }
 
-            _context.Entry(rate).State = EntityState.Modified;
+            if (!string.IsNullOrEmpty(updateRateDto.TypeVehicle))
+                rate.TypeVehicle = updateRateDto.TypeVehicle;
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!RateExists(id))
-                {
-                    return NotFound();
-                }
-                throw;
-            }
+            if (updateRateDto.HourPrice.HasValue)
+                rate.HourPrice = updateRateDto.HourPrice.Value;
+
+            if (updateRateDto.AddPrice.HasValue)
+                rate.AddPrice = updateRateDto.AddPrice.Value;
+
+            if (updateRateDto.MaxPrice.HasValue)
+                rate.MaxPrice = updateRateDto.MaxPrice.Value;
+
+            if (updateRateDto.GraceTime.HasValue)
+                rate.GraceTime = updateRateDto.GraceTime.Value;
+
+            if (updateRateDto.IsActive.HasValue)
+                rate.IsActive = updateRateDto.IsActive.Value;
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -108,11 +159,6 @@ namespace AutoSpace.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private bool RateExists(int id)
-        {
-            return _context.Rates.Any(e => e.Id == id);
         }
     }
 }
