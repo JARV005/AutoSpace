@@ -58,7 +58,7 @@ builder.Services.AddCors(options =>
         policy =>
         {
             policy.WithOrigins(
-                    "https://autospace-frontend.netlify.app/",  
+                    "https://autospace-frontend.netlify.app",  
                     "http://localhost:8080",                 // Desarrollo local
                     "http://localhost:3000",                 // Desarrollo local alternativo
                     "https://autospace-backend.onrender.com" // El mismo backend
@@ -84,7 +84,7 @@ app.Use(async (context, next) =>
     {
         var origin = context.Request.Headers["Origin"].ToString();
         var allowedOrigins = new[] { 
-            "https://autospace-frontend.netlify.app/",
+            "https://autospace-frontend.netlify.app",
             "http://localhost:8080", 
             "http://localhost:3000",
             "https://autospace-backend.onrender.com"
@@ -114,7 +114,7 @@ app.Use(async (context, next) =>
     {
         var origin = context.Request.Headers["Origin"].ToString();
         var allowedOrigins = new[] { 
-            "https://autospace-frontend.netlify.app/",
+            "https://autospace-frontend.netlify.app",
             "http://localhost:8080", 
             "http://localhost:3000",
             "https://autospace-backend.onrender.com"
@@ -136,7 +136,7 @@ app.Use(async (context, next) =>
         // Headers CORS incluso en errores
         var origin = context.Request.Headers["Origin"].ToString();
         var allowedOrigins = new[] { 
-            "https://autospace-frontend.netlify.app/",
+            "https://autospace-frontend.netlify.app",
             "http://localhost:8080", 
             "http://localhost:3000",
             "https://autospace-backend.onrender.com"
