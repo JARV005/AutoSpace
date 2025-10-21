@@ -9,7 +9,7 @@ namespace AutoSpace.DTOs
         public decimal MonthlyPrice { get; set; }
     }
 
-    public class SubscriptionDto
+    public class SubscriptionDTOs
     {
         public int Id { get; set; }
         public int UserId { get; set; }

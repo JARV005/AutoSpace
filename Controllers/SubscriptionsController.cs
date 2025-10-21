@@ -18,12 +18,12 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetSubscriptions()
+        public async Task<ActionResult<IEnumerable<SubscriptionDTOs>>> GetSubscriptions()
         {
             var subscriptions = await _context.Subscriptions
                 .Include(s => s.User)
                 .Include(s => s.Vehicle)
-                .Select(s => new SubscriptionDto
+                .Select(s => new SubscriptionDTOs
                 {
                     Id = s.Id,
                     UserId = s.UserId,
@@ -42,13 +42,13 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("active")]
-        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetActiveSubscriptions()
+        public async Task<ActionResult<IEnumerable<SubscriptionDTOs>>> GetActiveSubscriptions()
         {
             var subscriptions = await _context.Subscriptions
                 .Where(s => s.Status == "Active" && s.EndDate > DateTime.UtcNow)
                 .Include(s => s.User)
                 .Include(s => s.Vehicle)
-                .Select(s => new SubscriptionDto
+                .Select(s => new SubscriptionDTOs
                 {
                     Id = s.Id,
                     UserId = s.UserId,
@@ -67,14 +67,14 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("expiring")]
-        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetExpiringSubscriptions()
+        public async Task<ActionResult<IEnumerable<SubscriptionDTOs>>> GetExpiringSubscriptions()
         {
             var expiringDate = DateTime.UtcNow.AddDays(7);
             var subscriptions = await _context.Subscriptions
                 .Where(s => s.Status == "Active" && s.EndDate <= expiringDate)
                 .Include(s => s.User)
                 .Include(s => s.Vehicle)
-                .Select(s => new SubscriptionDto
+                .Select(s => new SubscriptionDTOs
                 {
                     Id = s.Id,
                     UserId = s.UserId,
@@ -93,7 +93,7 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<SubscriptionDto>> GetSubscription(int id)
+        public async Task<ActionResult<SubscriptionDTOs>> GetSubscription(int id)
         {
             var subscription = await _context.Subscriptions
                 .Include(s => s.User)
@@ -105,7 +105,7 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            var subscriptionDto = new SubscriptionDto
+            var subscriptionDto = new SubscriptionDTOs
             {
                 Id = subscription.Id,
                 UserId = subscription.UserId,
@@ -123,7 +123,7 @@ namespace AutoSpace.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<SubscriptionDto>> CreateSubscription(CreateSubscriptionDto createSubscriptionDto)
+        public async Task<ActionResult<SubscriptionDTOs>> CreateSubscription(CreateSubscriptionDto createSubscriptionDto)
         {
             // Verificar que el usuario existe
             var userExists = await _context.Users.AnyAsync(u => u.Id == createSubscriptionDto.UserId);
@@ -157,7 +157,7 @@ namespace AutoSpace.Controllers
             await _context.Entry(subscription).Reference(s => s.User).LoadAsync();
             await _context.Entry(subscription).Reference(s => s.Vehicle).LoadAsync();
 
-            var subscriptionDto = new SubscriptionDto
+            var subscriptionDto = new SubscriptionDTOs
             {
                 Id = subscription.Id,
                 UserId = subscription.UserId,

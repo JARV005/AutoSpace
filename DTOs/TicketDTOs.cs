@@ -9,7 +9,7 @@ namespace AutoSpace.DTOs
         public int? RateId { get; set; }
     }
 
-    public class TicketDto
+    public class TicketDTOs
     {
         public int Id { get; set; }
         public string TicketNumber { get; set; } = string.Empty;

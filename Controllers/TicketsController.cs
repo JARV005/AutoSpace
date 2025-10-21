@@ -21,14 +21,14 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TicketDto>>> GetTickets()
+        public async Task<ActionResult<IEnumerable<TicketDTOs>>> GetTickets()
         {
             var tickets = await _context.Tickets
                 .Include(t => t.Vehicle)
                 .Include(t => t.Operator)
                 .Include(t => t.Subscription)
                 .Include(t => t.Rate)
-                .Select(t => new TicketDto
+                .Select(t => new TicketDTOs
                 {
                     Id = t.Id,
                     TicketNumber = t.TicketNumber,
@@ -53,7 +53,7 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("active")]
-        public async Task<ActionResult<IEnumerable<TicketDto>>> GetActiveTickets()
+        public async Task<ActionResult<IEnumerable<TicketDTOs>>> GetActiveTickets()
         {
             var tickets = await _context.Tickets
                 .Where(t => t.ExitTime == null)
@@ -61,7 +61,7 @@ namespace AutoSpace.Controllers
                 .Include(t => t.Operator)
                 .Include(t => t.Subscription)
                 .Include(t => t.Rate)
-                .Select(t => new TicketDto
+                .Select(t => new TicketDTOs
                 {
                     Id = t.Id,
                     TicketNumber = t.TicketNumber,
@@ -86,7 +86,7 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<TicketDto>> GetTicket(int id)
+        public async Task<ActionResult<TicketDTOs>> GetTicket(int id)
         {
             var ticket = await _context.Tickets
                 .Include(t => t.Vehicle)
@@ -100,7 +100,7 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            var ticketDto = new TicketDto
+            var ticketDto = new TicketDTOs
             {
                 Id = ticket.Id,
                 TicketNumber = ticket.TicketNumber,
@@ -124,7 +124,7 @@ namespace AutoSpace.Controllers
         }
 
         [HttpGet("vehicle/{vehicleId}/active")]
-        public async Task<ActionResult<TicketDto>> GetActiveTicketByVehicle(int vehicleId)
+        public async Task<ActionResult<TicketDTOs>> GetActiveTicketByVehicle(int vehicleId)
         {
             var ticket = await _context.Tickets
                 .Where(t => t.VehicleId == vehicleId && t.ExitTime == null)
@@ -139,7 +139,7 @@ namespace AutoSpace.Controllers
                 return NotFound();
             }
 
-            var ticketDto = new TicketDto
+            var ticketDto = new TicketDTOs
             {
                 Id = ticket.Id,
                 TicketNumber = ticket.TicketNumber,
@@ -163,13 +163,13 @@ namespace AutoSpace.Controllers
         }
 
         [HttpPost("entry")]
-        public async Task<ActionResult<TicketDto>> RegisterEntry(CreateTicketDto createTicketDto)
+        public async Task<ActionResult<TicketDTOs>> RegisterEntry(CreateTicketDto createTicketDto)
         {
             try
             {
                 var ticket = await _ticketService.RegisterEntryAsync(createTicketDto);
                 
-                var ticketDto = new TicketDto
+                var ticketDto = new TicketDTOs
                 {
                     Id = ticket.Id,
                     TicketNumber = ticket.TicketNumber,
@@ -196,13 +196,13 @@ namespace AutoSpace.Controllers
         }
 
         [HttpPost("exit")]
-        public async Task<ActionResult<TicketDto>> RegisterExit(ExitTicketDto exitTicketDto)
+        public async Task<ActionResult<TicketDTOs>> RegisterExit(ExitTicketDto exitTicketDto)
         {
             try
             {
                 var ticket = await _ticketService.RegisterExitAsync(exitTicketDto);
                 
-                var ticketDto = new TicketDto
+                var ticketDto = new TicketDTOs
                 {
                     Id = ticket.Id,
                     TicketNumber = ticket.TicketNumber,
