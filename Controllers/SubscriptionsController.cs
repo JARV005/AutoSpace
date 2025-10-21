@@ -149,9 +149,21 @@ namespace AutoSpace.Controllers
                 Status = "Active",
                 CreatedAt = DateTime.UtcNow
             };
-
-            _context.Subscriptions.Add(subscription);
-            await _context.SaveChangesAsync();
+            
+            try
+            {
+                _context.Subscriptions.Add(subscription);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    error = "Error interno al guardar la suscripción",
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message
+                });
+            }
 
             // Cargar datos relacionados
             await _context.Entry(subscription).Reference(s => s.User).LoadAsync();
