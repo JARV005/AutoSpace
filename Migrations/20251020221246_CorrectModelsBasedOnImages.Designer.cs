@@ -12,20 +12,20 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AutoSpace.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251016215209_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251020221246_CorrectModelsBasedOnImages")]
+    partial class CorrectModelsBasedOnImages
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.10")
+                .HasAnnotation("ProductVersion", "8.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Mail", b =>
+            modelBuilder.Entity("AutoSpace.Models.Mail", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -38,33 +38,29 @@ namespace AutoSpace.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("SentAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasDefaultValueSql("NOW()");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Subject")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
-                    b.Property<int>("SubscriptionId")
+                    b.Property<int?>("SubscriptionId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("SentAt");
 
                     b.HasIndex("SubscriptionId");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("mails", (string)null);
+                    b.ToTable("Mails");
                 });
 
-            modelBuilder.Entity("Operator", b =>
+            modelBuilder.Entity("AutoSpace.Models.Operator", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -72,44 +68,37 @@ namespace AutoSpace.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Document")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Active");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Document");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.ToTable("operators", (string)null);
+                    b.ToTable("Operators");
                 });
 
-            modelBuilder.Entity("Payment", b =>
+            modelBuilder.Entity("AutoSpace.Models.Payment", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -118,49 +107,41 @@ namespace AutoSpace.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<int>("FeketId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OperatorId")
+                    b.Property<int?>("OperatorId")
                         .HasColumnType("integer");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("PaymentTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReferenceNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<DateTime>("PaymentTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasDefaultValueSql("NOW()");
+                    b.Property<int?>("SubscriptionId")
+                        .HasColumnType("integer");
 
-                    b.Property<string>("ReferenceNumber")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("SubscriptionId")
+                    b.Property<int?>("TicketId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OperatorId");
 
-                    b.HasIndex("PaymentTime");
-
-                    b.HasIndex("ReferenceNumber")
-                        .IsUnique();
-
                     b.HasIndex("SubscriptionId");
 
-                    b.ToTable("payments", (string)null);
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("Payments");
                 });
 
-            modelBuilder.Entity("Rate", b =>
+            modelBuilder.Entity("AutoSpace.Models.Rate", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -168,37 +149,38 @@ namespace AutoSpace.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("AddPrice")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<decimal?>("AddPrice")
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<string>("GraceTime")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("GraceTime")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("HourPrice")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<decimal>("MaxPrice")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("MaxPrice")
+                        .HasColumnType("decimal(10,2)");
 
                     b.Property<string>("TypeVehicle")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.ToTable("rates", (string)null);
+                    b.ToTable("Rates");
                 });
 
-            modelBuilder.Entity("Shift", b =>
+            modelBuilder.Entity("AutoSpace.Models.Shift", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -207,42 +189,34 @@ namespace AutoSpace.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime?>("EndTime")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("FinalCash")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<decimal>("InitialCash")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<decimal?>("InitialCash")
+                        .HasColumnType("decimal(10,2)");
 
                     b.Property<int>("OperatorId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal>("TotalCardPayments")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<decimal?>("TotalCardPayments")
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<decimal>("TotalCashPayments")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<decimal?>("TotalCashPayments")
+                        .HasColumnType("decimal(10,2)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OperatorId");
 
-                    b.HasIndex("StartTime");
-
-                    b.ToTable("shifts", (string)null);
+                    b.ToTable("Shifts");
                 });
 
-            modelBuilder.Entity("Subscription", b =>
+            modelBuilder.Entity("AutoSpace.Models.Subscription", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -250,23 +224,25 @@ namespace AutoSpace.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("EndDate")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("MonthlyPrice")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(10,2)");
 
                     b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Active");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
@@ -276,16 +252,14 @@ namespace AutoSpace.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Status");
-
                     b.HasIndex("UserId");
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("subscriptions", (string)null);
+                    b.ToTable("Subscriptions");
                 });
 
-            modelBuilder.Entity("Ticket", b =>
+            modelBuilder.Entity("AutoSpace.Models.Ticket", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -293,21 +267,22 @@ namespace AutoSpace.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("EntryTime")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("ExitTime")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("OperatorId")
+                    b.Property<int?>("OperatorId")
                         .HasColumnType("integer");
 
                     b.Property<string>("QRCode")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
-                    b.Property<int>("RateId")
+                    b.Property<int?>("RateId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("SubscriptionId")
@@ -318,22 +293,16 @@ namespace AutoSpace.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<decimal>("TotalAmount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,2)")
-                        .HasDefaultValue(0m);
+                    b.Property<decimal?>("TotalAmount")
+                        .HasColumnType("decimal(10,2)");
 
-                    b.Property<int>("TotalMinutes")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+                    b.Property<int?>("TotalMinutes")
+                        .HasColumnType("integer");
 
                     b.Property<int>("VehicleId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EntryTime");
 
                     b.HasIndex("OperatorId");
 
@@ -341,61 +310,59 @@ namespace AutoSpace.Migrations
 
                     b.HasIndex("SubscriptionId");
 
-                    b.HasIndex("TicketNumber")
-                        .IsUnique();
-
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("tickets", (string)null);
+                    b.ToTable("Tickets");
                 });
 
-            modelBuilder.Entity("User", b =>
+            modelBuilder.Entity("AutoSpace.Models.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Document")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Active");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Document");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.ToTable("users", (string)null);
+                    b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Vehicle", b =>
+            modelBuilder.Entity("AutoSpace.Models.Vehicle", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Plate")
                         .IsRequired()
@@ -404,83 +371,81 @@ namespace AutoSpace.Migrations
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Plate")
-                        .IsUnique();
-
                     b.HasIndex("UserId");
 
-                    b.ToTable("vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
-            modelBuilder.Entity("Mail", b =>
+            modelBuilder.Entity("AutoSpace.Models.Mail", b =>
                 {
-                    b.HasOne("Subscription", "Subscription")
-                        .WithMany("Mails")
-                        .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.HasOne("AutoSpace.Models.Subscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId");
 
-                    b.HasOne("User", "User")
-                        .WithMany("Mails")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.HasOne("AutoSpace.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
 
                     b.Navigation("Subscription");
 
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Payment", b =>
+            modelBuilder.Entity("AutoSpace.Models.Payment", b =>
                 {
-                    b.HasOne("Operator", "Operator")
+                    b.HasOne("AutoSpace.Models.Operator", "Operator")
                         .WithMany("Payments")
                         .HasForeignKey("OperatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Subscription", "Subscription")
+                    b.HasOne("AutoSpace.Models.Subscription", "Subscription")
                         .WithMany("Payments")
                         .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AutoSpace.Models.Ticket", "Ticket")
+                        .WithMany("Payments")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Operator");
 
                     b.Navigation("Subscription");
+
+                    b.Navigation("Ticket");
                 });
 
-            modelBuilder.Entity("Shift", b =>
+            modelBuilder.Entity("AutoSpace.Models.Shift", b =>
                 {
-                    b.HasOne("Operator", "Operator")
+                    b.HasOne("AutoSpace.Models.Operator", "Operator")
                         .WithMany("Shifts")
                         .HasForeignKey("OperatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Operator");
                 });
 
-            modelBuilder.Entity("Subscription", b =>
+            modelBuilder.Entity("AutoSpace.Models.Subscription", b =>
                 {
-                    b.HasOne("User", "User")
+                    b.HasOne("AutoSpace.Models.User", "User")
                         .WithMany("Subscriptions")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Vehicle", "Vehicle")
+                    b.HasOne("AutoSpace.Models.Vehicle", "Vehicle")
                         .WithMany("Subscriptions")
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -488,29 +453,27 @@ namespace AutoSpace.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("Ticket", b =>
+            modelBuilder.Entity("AutoSpace.Models.Ticket", b =>
                 {
-                    b.HasOne("Operator", "Operator")
+                    b.HasOne("AutoSpace.Models.Operator", "Operator")
                         .WithMany("Tickets")
                         .HasForeignKey("OperatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Rate", "Rate")
-                        .WithMany("Tickets")
+                    b.HasOne("AutoSpace.Models.Rate", "Rate")
+                        .WithMany()
                         .HasForeignKey("RateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Subscription", "Subscription")
+                    b.HasOne("AutoSpace.Models.Subscription", "Subscription")
                         .WithMany("Tickets")
                         .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Vehicle", "Vehicle")
+                    b.HasOne("AutoSpace.Models.Vehicle", "Vehicle")
                         .WithMany("Tickets")
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Operator");
@@ -522,18 +485,18 @@ namespace AutoSpace.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("Vehicle", b =>
+            modelBuilder.Entity("AutoSpace.Models.Vehicle", b =>
                 {
-                    b.HasOne("User", "User")
+                    b.HasOne("AutoSpace.Models.User", "User")
                         .WithMany("Vehicles")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Operator", b =>
+            modelBuilder.Entity("AutoSpace.Models.Operator", b =>
                 {
                     b.Navigation("Payments");
 
@@ -542,30 +505,26 @@ namespace AutoSpace.Migrations
                     b.Navigation("Tickets");
                 });
 
-            modelBuilder.Entity("Rate", b =>
+            modelBuilder.Entity("AutoSpace.Models.Subscription", b =>
                 {
-                    b.Navigation("Tickets");
-                });
-
-            modelBuilder.Entity("Subscription", b =>
-                {
-                    b.Navigation("Mails");
-
                     b.Navigation("Payments");
 
                     b.Navigation("Tickets");
                 });
 
-            modelBuilder.Entity("User", b =>
+            modelBuilder.Entity("AutoSpace.Models.Ticket", b =>
                 {
-                    b.Navigation("Mails");
+                    b.Navigation("Payments");
+                });
 
+            modelBuilder.Entity("AutoSpace.Models.User", b =>
+                {
                     b.Navigation("Subscriptions");
 
                     b.Navigation("Vehicles");
                 });
 
-            modelBuilder.Entity("Vehicle", b =>
+            modelBuilder.Entity("AutoSpace.Models.Vehicle", b =>
                 {
                     b.Navigation("Subscriptions");
 
