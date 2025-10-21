@@ -51,16 +51,22 @@ builder.Services.AddScoped<ITicketService, TicketService>();
 // Configure Email Settings
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 
-// ========== CONFIGURACIÓN CORS COMPLETA ==========
+// ========== CONFIGURACIÓN CORS MEJORADA Y SEGURA ==========
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
+    options.AddPolicy("AllowSpecificOrigins",
         policy =>
         {
-            policy.AllowAnyOrigin()
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .WithExposedHeaders("*"); // Exponer todos los headers
+            policy.WithOrigins(
+                    "https://autospace-frontend.netlify.app/",  
+                    "http://localhost:8080",                 // Desarrollo local
+                    "http://localhost:3000",                 // Desarrollo local alternativo
+                    "https://autospace-backend.onrender.com" // El mismo backend
+                )
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()
+                .WithExposedHeaders("*");
         });
 });
 
@@ -68,19 +74,32 @@ var app = builder.Build();
 
 // ========== MIDDLEWARE PIPELINE ==========
 
-// ✅ CORS DEBE IR PRIMERO EN LA PIPELINE
-app.UseCors("AllowAll");
+// ✅ CORS SEGURO - SOLO ORÍGENES ESPECÍFICOS
+app.UseCors("AllowSpecificOrigins");
 
 // ✅ MANEJADOR EXPLÍCITO PARA PREFLIGHT REQUESTS
 app.Use(async (context, next) =>
 {
     if (context.Request.Method == "OPTIONS")
     {
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+        var origin = context.Request.Headers["Origin"].ToString();
+        var allowedOrigins = new[] { 
+            "https://autospace-frontend.netlify.app/",
+            "http://localhost:8080", 
+            "http://localhost:3000",
+            "https://autospace-backend.onrender.com"
+        };
+        
+        if (allowedOrigins.Contains(origin))
+        {
+            context.Response.Headers.Add("Access-Control-Allow-Origin", origin);
+        }
+        
         context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
         context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-API-Key");
         context.Response.Headers.Add("Access-Control-Expose-Headers", "*");
-        context.Response.Headers.Add("Access-Control-Max-Age", "86400"); // 24 horas
+        context.Response.Headers.Add("Access-Control-Max-Age", "86400");
+        context.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
         context.Response.StatusCode = 200;
         await context.Response.CompleteAsync();
         return;
@@ -93,9 +112,19 @@ app.Use(async (context, next) =>
 {
     try
     {
-        // Asegurar headers CORS en todas las respuestas
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-        context.Response.Headers.Add("Access-Control-Expose-Headers", "*");
+        var origin = context.Request.Headers["Origin"].ToString();
+        var allowedOrigins = new[] { 
+            "https://autospace-frontend.netlify.app/",
+            "http://localhost:8080", 
+            "http://localhost:3000",
+            "https://autospace-backend.onrender.com"
+        };
+        
+        if (allowedOrigins.Contains(origin))
+        {
+            context.Response.Headers.Add("Access-Control-Allow-Origin", origin);
+            context.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
+        }
         
         await next();
     }
@@ -105,10 +134,19 @@ app.Use(async (context, next) =>
         Console.WriteLine($"Stack Trace: {ex.StackTrace}");
         
         // Headers CORS incluso en errores
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        context.Response.Headers.Add("Access-Control-Expose-Headers", "*");
+        var origin = context.Request.Headers["Origin"].ToString();
+        var allowedOrigins = new[] { 
+            "https://autospace-frontend.netlify.app/",
+            "http://localhost:8080", 
+            "http://localhost:3000",
+            "https://autospace-backend.onrender.com"
+        };
+        
+        if (allowedOrigins.Contains(origin))
+        {
+            context.Response.Headers.Add("Access-Control-Allow-Origin", origin);
+            context.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
+        }
         
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
@@ -148,7 +186,7 @@ app.MapGet("/", () => {
         version = "1.0.0",
         status = "active",
         environment = app.Environment.EnvironmentName,
-        cors = "enabled"
+        cors = "specific_origins_only"
     });
 });
 
@@ -162,7 +200,7 @@ app.MapGet("/health", async (ApplicationDbContext dbContext) => {
             database = canConnect ? "Connected" : "Disconnected",
             timestamp = DateTime.UtcNow,
             service = "AutoSpace API",
-            cors = "enabled"
+            cors = "specific_origins_only"
         });
     }
     catch (Exception ex)
@@ -171,51 +209,10 @@ app.MapGet("/health", async (ApplicationDbContext dbContext) => {
             status = "Unhealthy",
             error = ex.Message,
             timestamp = DateTime.UtcNow,
-            cors = "enabled"
+            cors = "specific_origins_only"
         }, statusCode: 503);
     }
 });
-
-// ✅ ENDPOINTS DE PRUEBA CORS
-app.MapGet("/api/test-cors", () => {
-    return Results.Json(new {
-        message = "CORS GET test successful",
-        timestamp = DateTime.UtcNow,
-        cors = "enabled",
-        method = "GET"
-    });
-});
-
-app.MapPost("/api/test-cors-post", (TestModel model) => {
-    return Results.Json(new {
-        message = "CORS POST test successful",
-        received = model,
-        timestamp = DateTime.UtcNow,
-        cors = "enabled",
-        method = "POST"
-    });
-});
-
-app.MapPut("/api/test-cors-put", (TestModel model) => {
-    return Results.Json(new {
-        message = "CORS PUT test successful",
-        received = model,
-        timestamp = DateTime.UtcNow,
-        cors = "enabled",
-        method = "PUT"
-    });
-});
-
-app.MapDelete("/api/test-cors-delete", () => {
-    return Results.Json(new {
-        message = "CORS DELETE test successful",
-        timestamp = DateTime.UtcNow,
-        cors = "enabled",
-        method = "DELETE"
-    });
-});
-
-// ========== INICIALIZACIÓN ==========
 
 // ✅ VERIFICACIÓN DE BASE DE DATOS (solo log, no bloqueante)
 _ = Task.Run(async () =>
@@ -233,20 +230,34 @@ _ = Task.Run(async () =>
         {
             Console.WriteLine("✅ Database connection successful");
             
-            // Verificar tablas existentes
-            var tables = new[] { "Users", "Vehicles", "Subscriptions", "Rates", "Operators", "Tickets" };
-            foreach (var table in tables)
+            // Verificar tablas usando los DbSets correctos
+            try
             {
-                try
-                {
-                    // Intentar contar registros en cada tabla
-                    var count = await dbContext.Set<object>().FromSqlRaw($"SELECT 1 FROM \"{table}\" LIMIT 1").CountAsync();
-                    Console.WriteLine($"✅ Table {table}: OK");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ Table {table}: {ex.Message}");
-                }
+                Console.WriteLine("=== VERIFICANDO TABLAS DE BASE DE DATOS ===");
+                
+                var usersCount = await dbContext.Users.CountAsync();
+                Console.WriteLine($"✅ Table Users: OK ({usersCount} registros)");
+                
+                var vehiclesCount = await dbContext.Vehicles.CountAsync();
+                Console.WriteLine($"✅ Table Vehicles: OK ({vehiclesCount} registros)");
+                
+                var subscriptionsCount = await dbContext.Subscriptions.CountAsync();
+                Console.WriteLine($"✅ Table Subscriptions: OK ({subscriptionsCount} registros)");
+                
+                var ratesCount = await dbContext.Rates.CountAsync();
+                Console.WriteLine($"✅ Table Rates: OK ({ratesCount} registros)");
+                
+                var operatorsCount = await dbContext.Operators.CountAsync();
+                Console.WriteLine($"✅ Table Operators: OK ({operatorsCount} registros)");
+                
+                var ticketsCount = await dbContext.Tickets.CountAsync();
+                Console.WriteLine($"✅ Table Tickets: OK ({ticketsCount} registros)");
+                
+                Console.WriteLine("=== VERIFICACIÓN DE TABLAS COMPLETADA ===");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error verificando tablas: {ex.Message}");
             }
         }
         else
@@ -263,15 +274,8 @@ _ = Task.Run(async () =>
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 Console.WriteLine($"Starting application on port: {port}");
 Console.WriteLine($"Application URL: http://0.0.0.0:{port}");
-Console.WriteLine($"CORS Policy: AllowAll");
+Console.WriteLine($"CORS Policy: AllowSpecificOrigins");
 Console.WriteLine("=== APPLICATION STARTED SUCCESSFULLY ===");
 
 // ✅ ESTA DEBE SER LA ÚLTIMA LÍNEA - INICIA EL SERVIDOR
 app.Run($"http://0.0.0.0:{port}");
-
-// Modelo para el test POST
-public class TestModel
-{
-    public string Test { get; set; }
-    public int Number { get; set; }
-}
