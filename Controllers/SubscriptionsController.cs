@@ -30,6 +30,7 @@ namespace AutoSpace.Controllers
                     UserFullName = s.User.FullName,
                     VehicleId = s.VehicleId,
                     VehiclePlate = s.Vehicle.Plate,
+                    VehicleType = s.Vehicle.Type, // ✅ AGREGADO: Tipo de vehículo
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     MonthlyPrice = s.MonthlyPrice,
@@ -55,6 +56,7 @@ namespace AutoSpace.Controllers
                     UserFullName = s.User.FullName,
                     VehicleId = s.VehicleId,
                     VehiclePlate = s.Vehicle.Plate,
+                    VehicleType = s.Vehicle.Type, // ✅ AGREGADO: Tipo de vehículo
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     MonthlyPrice = s.MonthlyPrice,
@@ -81,6 +83,7 @@ namespace AutoSpace.Controllers
                     UserFullName = s.User.FullName,
                     VehicleId = s.VehicleId,
                     VehiclePlate = s.Vehicle.Plate,
+                    VehicleType = s.Vehicle.Type, // ✅ AGREGADO: Tipo de vehículo
                     StartDate = s.StartDate,
                     EndDate = s.EndDate,
                     MonthlyPrice = s.MonthlyPrice,
@@ -112,6 +115,7 @@ namespace AutoSpace.Controllers
                 UserFullName = subscription.User.FullName,
                 VehicleId = subscription.VehicleId,
                 VehiclePlate = subscription.Vehicle.Plate,
+                VehicleType = subscription.Vehicle.Type, // ✅ AGREGADO: Tipo de vehículo
                 StartDate = subscription.StartDate,
                 EndDate = subscription.EndDate,
                 MonthlyPrice = subscription.MonthlyPrice,
@@ -176,6 +180,7 @@ namespace AutoSpace.Controllers
                 UserFullName = subscription.User.FullName,
                 VehicleId = subscription.VehicleId,
                 VehiclePlate = subscription.Vehicle.Plate,
+                VehicleType = subscription.Vehicle.Type, // ✅ AGREGADO: Tipo de vehículo
                 StartDate = subscription.StartDate,
                 EndDate = subscription.EndDate,
                 MonthlyPrice = subscription.MonthlyPrice,

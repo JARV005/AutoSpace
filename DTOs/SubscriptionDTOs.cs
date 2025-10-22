@@ -16,6 +16,8 @@ namespace AutoSpace.DTOs
         public string UserFullName { get; set; } = string.Empty;
         public int VehicleId { get; set; }
         public string VehiclePlate { get; set; } = string.Empty;
+        
+        public string VehicleType { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public decimal MonthlyPrice { get; set; }
