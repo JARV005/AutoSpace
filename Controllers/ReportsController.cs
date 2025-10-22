@@ -1,4 +1,4 @@
-// Controllers/ReportsController.cs
+// Controllers/ReportsController.cs - MÉTODOS CORREGIDOS
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -22,13 +22,17 @@ public class ReportsController : ControllerBase
     // GET: api/reports/income?startDate=2024-01-01&endDate=2024-01-31
     [HttpGet("income")]
     public async Task<ActionResult<IncomeReportDto>> GetIncomeReport(
-        [FromQuery] DateTime startDate, 
-        [FromQuery] DateTime endDate)
+        [FromQuery] string startDate,  // Cambiar a string
+        [FromQuery] string endDate)    // Cambiar a string
     {
         try
         {
+            // Convertir strings a DateTime con UTC
+            var startDateUtc = DateTime.Parse(startDate).ToUniversalTime();
+            var endDateUtc = DateTime.Parse(endDate).ToUniversalTime().AddDays(1).AddSeconds(-1); // Hasta el final del día
+
             var subscriptions = await _context.Subscriptions
-                .Where(s => s.StartDate >= startDate && s.EndDate <= endDate)
+                .Where(s => s.StartDate >= startDateUtc && s.EndDate <= endDateUtc)
                 .Include(s => s.Vehicle)
                 .Include(s => s.User)
                 .ToListAsync();
@@ -52,8 +56,8 @@ public class ReportsController : ControllerBase
                 TotalIncome = totalIncome,
                 TotalVehicles = totalVehicles,
                 DailyIncomes = dailyIncomes,
-                StartDate = startDate,
-                EndDate = endDate
+                StartDate = startDateUtc,
+                EndDate = endDateUtc
             };
 
             return Ok(report);
@@ -67,13 +71,17 @@ public class ReportsController : ControllerBase
     // GET: api/reports/subscriptions?startDate=2024-01-01&endDate=2024-01-31
     [HttpGet("subscriptions")]
     public async Task<ActionResult<SubscriptionReportDto>> GetSubscriptionsReport(
-        [FromQuery] DateTime startDate, 
-        [FromQuery] DateTime endDate)
+        [FromQuery] string startDate,
+        [FromQuery] string endDate)
     {
         try
         {
+            // Convertir strings a DateTime con UTC
+            var startDateUtc = DateTime.Parse(startDate).ToUniversalTime();
+            var endDateUtc = DateTime.Parse(endDate).ToUniversalTime().AddDays(1).AddSeconds(-1);
+
             var subscriptions = await _context.Subscriptions
-                .Where(s => s.StartDate >= startDate && s.EndDate <= endDate)
+                .Where(s => s.StartDate >= startDateUtc && s.EndDate <= endDateUtc)
                 .Include(s => s.Vehicle)
                 .Include(s => s.User)
                 .Select(s => new SubscriptionDetailDto
@@ -85,7 +93,7 @@ public class ReportsController : ControllerBase
                     EndDate = s.EndDate,
                     MonthlyPrice = s.MonthlyPrice,
                     Status = s.Status,
-                    UserName = s.User.FullName // Usar FullName
+                    UserName = s.User.FullName
                 })
                 .ToListAsync();
 
@@ -96,8 +104,8 @@ public class ReportsController : ControllerBase
                 ExpiredSubscriptions = subscriptions.Count(s => s.Status == "Expired" || s.Status == "Cancelled"),
                 TotalRevenue = subscriptions.Sum(s => s.MonthlyPrice),
                 Subscriptions = subscriptions,
-                StartDate = startDate,
-                EndDate = endDate
+                StartDate = startDateUtc,
+                EndDate = endDateUtc
             };
 
             return Ok(report);
@@ -111,24 +119,28 @@ public class ReportsController : ControllerBase
     // GET: api/reports/users?startDate=2024-01-01&endDate=2024-01-31
     [HttpGet("users")]
     public async Task<ActionResult<UserReportDto>> GetUsersReport(
-        [FromQuery] DateTime startDate, 
-        [FromQuery] DateTime endDate)
+        [FromQuery] string startDate,
+        [FromQuery] string endDate)
     {
         try
         {
+            // Convertir strings a DateTime con UTC
+            var startDateUtc = DateTime.Parse(startDate).ToUniversalTime();
+            var endDateUtc = DateTime.Parse(endDate).ToUniversalTime().AddDays(1).AddSeconds(-1);
+
             var users = await _context.Users
                 .Include(u => u.Subscriptions)
                 .Select(u => new UserPerformanceDto
                 {
                     UserId = u.Id,
-                    UserName = u.FullName, // Usar FullName
+                    UserName = u.FullName,
                     Email = u.Email,
                     Document = u.Document,
                     Status = u.Status,
                     TotalSubscriptions = u.Subscriptions.Count(s => 
-                        s.StartDate >= startDate && s.EndDate <= endDate),
+                        s.StartDate >= startDateUtc && s.EndDate <= endDateUtc),
                     TotalRevenue = u.Subscriptions
-                        .Where(s => s.StartDate >= startDate && s.EndDate <= endDate)
+                        .Where(s => s.StartDate >= startDateUtc && s.EndDate <= endDateUtc)
                         .Sum(s => s.MonthlyPrice)
                 })
                 .ToListAsync();
@@ -138,8 +150,8 @@ public class ReportsController : ControllerBase
                 TotalUsers = users.Count,
                 ActiveUsers = users.Count(u => u.Status == "Active"),
                 UserPerformances = users.Where(u => u.TotalSubscriptions > 0).ToList(),
-                StartDate = startDate,
-                EndDate = endDate
+                StartDate = startDateUtc,
+                EndDate = endDateUtc
             };
 
             return Ok(report);
@@ -153,16 +165,20 @@ public class ReportsController : ControllerBase
     // GET: api/reports/operators?startDate=2024-01-01&endDate=2024-01-31
     [HttpGet("operators")]
     public async Task<ActionResult<OperatorReportDto>> GetOperatorsReport(
-        [FromQuery] DateTime startDate, 
-        [FromQuery] DateTime endDate)
+        [FromQuery] string startDate,
+        [FromQuery] string endDate)
     {
         try
         {
+            // Convertir strings a DateTime con UTC
+            var startDateUtc = DateTime.Parse(startDate).ToUniversalTime();
+            var endDateUtc = DateTime.Parse(endDate).ToUniversalTime().AddDays(1).AddSeconds(-1);
+
             var operators = await _context.Operators
                 .Select(o => new OperatorPerformanceDto
                 {
                     OperatorId = o.Id,
-                    OperatorName = o.FullName, // Usar FullName
+                    OperatorName = o.FullName,
                     Email = o.Email,
                     Document = o.Document,
                     Status = o.Status,
@@ -178,8 +194,8 @@ public class ReportsController : ControllerBase
                 TotalOperators = operators.Count,
                 ActiveOperators = operators.Count(o => o.IsActive),
                 OperatorPerformances = operators,
-                StartDate = startDate,
-                EndDate = endDate
+                StartDate = startDateUtc,
+                EndDate = endDateUtc
             };
 
             return Ok(report);
@@ -193,24 +209,28 @@ public class ReportsController : ControllerBase
     // GET: api/reports/vehicles?startDate=2024-01-01&endDate=2024-01-31
     [HttpGet("vehicles")]
     public async Task<ActionResult<VehicleReportDto>> GetVehiclesReport(
-        [FromQuery] DateTime startDate, 
-        [FromQuery] DateTime endDate)
+        [FromQuery] string startDate,
+        [FromQuery] string endDate)
     {
         try
         {
+            // Convertir strings a DateTime con UTC
+            var startDateUtc = DateTime.Parse(startDate).ToUniversalTime();
+            var endDateUtc = DateTime.Parse(endDate).ToUniversalTime().AddDays(1).AddSeconds(-1);
+
             var vehicles = await _context.Vehicles
                 .Include(v => v.Subscriptions)
                 .Where(v => v.Subscriptions.Any(s => 
-                    s.StartDate >= startDate && s.EndDate <= endDate))
+                    s.StartDate >= startDateUtc && s.EndDate <= endDateUtc))
                 .Select(v => new VehicleStatsDto
                 {
                     VehicleId = v.Id,
                     Plate = v.Plate,
                     Type = v.Type,
                     TotalSubscriptions = v.Subscriptions.Count(s => 
-                        s.StartDate >= startDate && s.EndDate <= endDate),
+                        s.StartDate >= startDateUtc && s.EndDate <= endDateUtc),
                     TotalRevenue = v.Subscriptions
-                        .Where(s => s.StartDate >= startDate && s.EndDate <= endDate)
+                        .Where(s => s.StartDate >= startDateUtc && s.EndDate <= endDateUtc)
                         .Sum(s => s.MonthlyPrice)
                 })
                 .ToListAsync();
@@ -219,8 +239,8 @@ public class ReportsController : ControllerBase
             {
                 TotalVehicles = vehicles.Count,
                 VehicleStats = vehicles,
-                StartDate = startDate,
-                EndDate = endDate
+                StartDate = startDateUtc,
+                EndDate = endDateUtc
             };
 
             return Ok(report);
