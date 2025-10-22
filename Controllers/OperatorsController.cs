@@ -21,6 +21,7 @@ namespace AutoSpace.Controllers
         public async Task<ActionResult<IEnumerable<OperatorDto>>> GetOperators()
         {
             var operators = await _context.Operators
+                .Where(o => o.IsActive) // ✅ Solo operadores activos
                 .Include(o => o.Tickets)
                 .Include(o => o.Payments)
                 .Include(o => o.Shifts)
@@ -46,6 +47,31 @@ namespace AutoSpace.Controllers
         {
             var operators = await _context.Operators
                 .Where(o => o.IsActive)
+                .Include(o => o.Tickets)
+                .Include(o => o.Payments)
+                .Include(o => o.Shifts)
+                .Select(o => new OperatorDto
+                {
+                    Id = o.Id,
+                    FullName = o.FullName,
+                    Document = o.Document,
+                    Email = o.Email,
+                    Status = o.Status,
+                    IsActive = o.IsActive,
+                    CreatedAt = o.CreatedAt,
+                    TicketsProcessed = o.Tickets.Count,
+                    TotalCollected = o.Payments.Where(p => p.TicketId != null).Sum(p => p.Amount)
+                })
+                .ToListAsync();
+
+            return operators;
+        }
+
+        // ✅ NUEVO ENDPOINT: Obtener todos los operadores (activos e inactivos)
+        [HttpGet("all")]
+        public async Task<ActionResult<IEnumerable<OperatorDto>>> GetAllOperators()
+        {
+            var operators = await _context.Operators
                 .Include(o => o.Tickets)
                 .Include(o => o.Payments)
                 .Include(o => o.Shifts)
@@ -113,7 +139,7 @@ namespace AutoSpace.Controllers
                 Document = createOperatorDto.Document,
                 Email = createOperatorDto.Email,
                 Status = createOperatorDto.Status,
-                IsActive = true,
+                IsActive = true, // ✅ Siempre activo al crear
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -165,6 +191,37 @@ namespace AutoSpace.Controllers
             return NoContent();
         }
 
+        // ✅ REEMPLAZADO: En lugar de eliminar, inactivamos el operador
+        [HttpPatch("{id}/deactivate")]
+        public async Task<IActionResult> DeactivateOperator(int id)
+        {
+            var operatorEntity = await _context.Operators.FindAsync(id);
+            if (operatorEntity == null)
+            {
+                return NotFound(new { error = "Operador no encontrado" });
+            }
+
+            // Verificar si el operador ya está inactivo
+            if (!operatorEntity.IsActive)
+            {
+                return BadRequest(new { error = "El operador ya está inactivo" });
+            }
+
+            // ✅ Inactivar en lugar de eliminar
+            operatorEntity.IsActive = false;
+            await _context.SaveChangesAsync();
+
+            return Ok(new 
+            { 
+                message = "Operador inactivado exitosamente",
+                id = operatorEntity.Id,
+                fullName = operatorEntity.FullName,
+                isActive = operatorEntity.IsActive
+            });
+        }
+
+        // ✅ ELIMINAR el método DeleteOperator existente o comentarlo
+        /*
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOperator(int id)
         {
@@ -179,5 +236,6 @@ namespace AutoSpace.Controllers
 
             return NoContent();
         }
+        */
     }
 }
